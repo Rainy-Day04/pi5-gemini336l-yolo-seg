@@ -34,6 +34,58 @@ update_apt_indexes() {
   return 1
 }
 
+clone_orbbec_driver() {
+  local driver_dir="$1"
+  local backup_dir
+  local repository_url
+  local attempt
+  local -a repository_urls
+
+  if [[ -d "${driver_dir}/.git" ]] \
+    && git -C "${driver_dir}" rev-parse --verify 'HEAD^{commit}' >/dev/null 2>&1 \
+    && [[ -f "${driver_dir}/orbbec_camera/package.xml" ]]; then
+    echo "Using existing Orbbec driver: ${driver_dir}"
+    return 0
+  fi
+
+  if [[ -e "${driver_dir}" ]]; then
+    backup_dir="${driver_dir}.incomplete.$(date +%Y%m%d%H%M%S).${RANDOM}"
+    echo "Moving incomplete driver checkout to ${backup_dir}" >&2
+    mv -- "${driver_dir}" "${backup_dir}"
+  fi
+
+  if [[ -n "${ORBBEC_REPOSITORY_URL:-}" ]]; then
+    repository_urls=("${ORBBEC_REPOSITORY_URL}")
+  else
+    repository_urls=(
+      "https://github.com/orbbec/OrbbecSDK_ROS2.git"
+      "https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2.git"
+    )
+  fi
+
+  for repository_url in "${repository_urls[@]}"; do
+    for attempt in 1 2 3; do
+      echo "Cloning Orbbec driver from ${repository_url} (attempt ${attempt}/3)..."
+      if git -c http.version=HTTP/1.1 clone \
+        --depth 1 \
+        --single-branch \
+        --branch v2-main \
+        --filter=blob:none \
+        "${repository_url}" "${driver_dir}"; then
+        return 0
+      fi
+      if [[ -e "${driver_dir}" ]]; then
+        backup_dir="${driver_dir}.incomplete.$(date +%Y%m%d%H%M%S).${RANDOM}"
+        mv -- "${driver_dir}" "${backup_dir}"
+      fi
+      sleep $((attempt * 3))
+    done
+  done
+
+  echo "Unable to clone the Orbbec driver from all configured mirrors." >&2
+  return 1
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "$(basename "$(dirname "${repo_dir}")")" == "src" ]]; then
   default_workspace="$(cd "${repo_dir}/../.." && pwd)"
@@ -87,10 +139,7 @@ fi
 
 if ! ros2 pkg prefix orbbec_camera >/dev/null 2>&1; then
   driver_dir="${workspace_dir}/src/OrbbecSDK_ROS2"
-  if [[ ! -d "${driver_dir}/.git" ]]; then
-    git clone --depth 1 --branch v2-main \
-      https://github.com/orbbec/OrbbecSDK_ROS2.git "${driver_dir}"
-  fi
+  clone_orbbec_driver "${driver_dir}"
   sudo bash "${driver_dir}/orbbec_camera/scripts/install_udev_rules.sh"
 else
   rules="/opt/ros/${ROS_DISTRO}/share/orbbec_camera/udev/99-obsensor-libusb.rules"
