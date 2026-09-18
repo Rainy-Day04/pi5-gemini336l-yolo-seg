@@ -225,6 +225,25 @@ docker/                   可选备用容器
 
 ## 故障排查
 
+### 固件 1.4.60 与 SDK2 v2.4.3 报 `NoiseRemovalFilter#1 doesn't exist`
+
+部分 Gemini 336L 会报告旧版降噪属性，但相机中没有对应的可选滤波配置。
+OrbbecSDK 2.4.3 即使在关闭滤波器时仍会查询该配置，导致 RGB/Depth topic
+无法启动。保持滤波器关闭，并应用仓库内的窄范围兼容补丁：
+
+```bash
+cd ~/gemini336l_ws/src/pi5-gemini336l-yolo-seg
+./scripts/patch_orbbec_v243.sh ~/gemini336l_ws
+
+cd ~/gemini336l_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-up-to orbbec_camera \
+  --cmake-clean-cache --cmake-args -DCMAKE_BUILD_TYPE=Release
+```
+
+补丁只会在 `enable_noise_removal_filter:=false` 时跳过两个可选降噪参数查询；
+原始 RGB 和 Depth 处理仍然启用。
+
 - **看不到相机**：拔插 USB 3 线；运行 `ros2 run orbbec_camera list_devices_node`；重装 udev。
 - **`apt update` 提示 `Mirror sync in progress`**：这是所选镜像站正在同步，不是本仓库损坏。安装脚本会自动重试；仍失败时等待镜像同步完成，或只把 ROS 2 软件源切换到另一个可信镜像后重跑。已有 apt 索引确定可用时，也可用 `SKIP_APT_UPDATE=1 ./scripts/install.sh ~/gemini336l_ws` 跳过更新。
 - **克隆 Orbbec 驱动时出现 `early EOF` / `Connection reset by peer`**：安装器会用 HTTP/1.1 自动重试，并在 GitHub 失败后切换官方 Gitee 镜像。也可直接指定：`ORBBEC_REPOSITORY_URL=https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2.git ./scripts/install.sh ~/gemini336l_ws`。不完整的目录会先改名保留，不会直接删除。

@@ -1,0 +1,18 @@
+diff --git a/orbbec_camera/src/ob_camera_node.cpp b/orbbec_camera/src/ob_camera_node.cpp
+index d079276..9c5062b 100644
+--- a/orbbec_camera/src/ob_camera_node.cpp
++++ b/orbbec_camera/src/ob_camera_node.cpp
+@@ -628,7 +628,8 @@ void OBCameraNode::setupDevices() {
+-  if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
++  if (enable_noise_removal_filter_ &&
++      device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
+     auto default_noise_removal_filter_min_diff =
+         device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+     RCLCPP_INFO_STREAM(logger_, "default noise removal filter min diff: "
+@@ -652,7 +653,8 @@ void OBCameraNode::setupDevices() {
+-  if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
++  if (enable_noise_removal_filter_ &&
++      device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
+     auto default_noise_removal_filter_max_size =
+         device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+     RCLCPP_INFO_STREAM(logger_, "default noise removal filter max size: "
