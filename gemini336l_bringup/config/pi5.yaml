@@ -26,3 +26,6 @@ gemini336l_yolo_seg:
     # Kept false for perception-only launches until Orbbec D2C is explicitly enabled.
     depth_aligned_to_color: false
     show_distance_on_overlay: true
+    # Object XYZ is transformed here before publishing and drawing navigation x/y.
+    navigation_frame: base_link
+    tf_lookup_timeout_sec: 0.02

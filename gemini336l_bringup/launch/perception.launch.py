@@ -40,6 +40,7 @@ def generate_launch_description():
                 default_value="false",
                 description="Set true only when the Orbbec driver aligns depth to color.",
             ),
+            DeclareLaunchArgument("navigation_frame", default_value="base_link"),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -57,6 +58,9 @@ def generate_launch_description():
                         "depth_aligned_to_color": ParameterValue(
                             LaunchConfiguration("depth_aligned_to_color"),
                             value_type=bool,
+                        ),
+                        "navigation_frame": LaunchConfiguration(
+                            "navigation_frame"
                         ),
                     },
                 ],

@@ -13,9 +13,14 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
+from geometry_msgs.msg import PointStamped
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
+from tf2_geometry_msgs import do_transform_point
+from tf2_ros import Buffer, TransformException, TransformListener
 
 from gemini336l_msgs.msg import Object2D, Object2DArray, Object3D, Object3DArray
 
@@ -80,6 +85,8 @@ class SegmentationNode(Node):
         self._work: queue.Queue[WorkItem | None] = queue.Queue(maxsize=1)
         self._results: queue.Queue[WorkResult] = queue.Queue(maxsize=1)
         self._stop = threading.Event()
+        self._tf_buffer = Buffer()
+        self._tf_listener = TransformListener(self._tf_buffer, self)
 
         self._load_model()
         self._create_io()
@@ -118,6 +125,8 @@ class SegmentationNode(Node):
             "mask_alpha": 0.45,
             "depth_aligned_to_color": False,
             "show_distance_on_overlay": True,
+            "navigation_frame": "base_link",
+            "tf_lookup_timeout_sec": 0.02,
         }
         for name, default in parameters.items():
             self.declare_parameter(name, default)
@@ -432,10 +441,11 @@ class SegmentationNode(Node):
                     obj.pixel_v = projection.v
                     obj.valid_depth_pixels = projection.valid_pixels
             message.objects.append(obj)
+        self._transform_objects_to_navigation_frame(message)
         return message
 
-    @staticmethod
     def _draw_distance_labels(
+        self,
         overlay: np.ndarray,
         detections: list[Detection],
         objects_3d: Object3DArray,
@@ -444,7 +454,17 @@ class SegmentationNode(Node):
         for detection, obj in zip(detections, objects_3d.objects, strict=False):
             if not obj.position_valid:
                 continue
-            text = f"distance {obj.depth_m:.2f} m"
+            navigation_frame = str(
+                self.get_parameter("navigation_frame").value
+            ).strip()
+            if navigation_frame and objects_3d.header.frame_id == navigation_frame:
+                planar_distance = float(np.hypot(obj.position.x, obj.position.y))
+                text = (
+                    f"x {obj.position.x:.2f}  y {obj.position.y:.2f}  "
+                    f"d {planar_distance:.2f} m"
+                )
+            else:
+                text = f"depth {obj.depth_m:.2f} m"
             x1, y1, _, _ = detection.box
             color = SegmentationNode._color_for_class(detection.class_id)
             (text_width, text_height), baseline = cv2.getTextSize(
@@ -469,6 +489,42 @@ class SegmentationNode(Node):
                 1,
                 cv2.LINE_AA,
             )
+
+    def _transform_objects_to_navigation_frame(
+        self, message: Object3DArray
+    ) -> None:
+        target_frame = str(self.get_parameter("navigation_frame").value).strip()
+        source_frame = message.header.frame_id
+        if not target_frame or not source_frame or target_frame == source_frame:
+            return
+        if not any(obj.position_valid for obj in message.objects):
+            return
+        try:
+            transform = self._tf_buffer.lookup_transform(
+                target_frame,
+                source_frame,
+                Time(),
+                timeout=Duration(
+                    seconds=float(
+                        self.get_parameter("tf_lookup_timeout_sec").value
+                    )
+                ),
+            )
+        except TransformException as exc:
+            self._warn_throttled(
+                f"Cannot transform {source_frame} to {target_frame}; navigation "
+                f"x/y is unavailable: {exc}"
+            )
+            return
+
+        for obj in message.objects:
+            if not obj.position_valid:
+                continue
+            point = PointStamped()
+            point.header = message.header
+            point.point = obj.position
+            obj.position = do_transform_point(point, transform).point
+        message.header.frame_id = target_frame
 
     def _warn_throttled(self, text: str) -> None:
         now = time.monotonic()

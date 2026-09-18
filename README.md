@@ -105,11 +105,23 @@ export ROS_DOMAIN_ID=23
 
 `objects_3d.header.frame_id` 使用 color `CameraInfo` 的 optical frame；ROS 相机坐标约定为 X 向右、Y 向下、Z 向前。每个 3D 对象都有 `position_valid`，无匹配深度时仍保留分类结果但置为 false。
 
-距离取每个实例 mask 内有效对齐深度的中位数，并显示为 `distance 1.23 m`。单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
+距离取每个实例 mask 内有效对齐深度的中位数。节点通过 TF 把相机坐标转换到 `base_link` 后，overlay 显示 `x 1.20 y -0.30 d 1.24 m`：x 为前后、y 为左右、d 为地面平面距离。`objects_3d.position` 同样位于其 header 指明的导航坐标系中。
+
+单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
 
 ```bash
 ./scripts/run.sh perception ~/gemini336l_ws depth_aligned_to_color:=true
 ```
+
+底盘必须发布真实的 `base_link -> camera_link` 安装变换。以下仅展示命令格式，`TX TY TZ ROLL PITCH YAW` 必须换成实测的前、左、上偏移（米）以及三个安装角（弧度）：
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  --x TX --y TY --z TZ --roll ROLL --pitch PITCH --yaw YAW \
+  --frame-id base_link --child-frame-id camera_link
+```
+
+Orbbec 驱动继续负责 `camera_link -> camera_color_optical_frame`。没有完整 TF 链时，节点保留光学深度但不会冒充导航 x/y。
 
 运行后检查：
 
