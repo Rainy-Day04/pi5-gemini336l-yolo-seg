@@ -1,0 +1,9 @@
+int32 instance_id
+int32 class_id
+string class_name
+float32 confidence
+uint32 x_min
+uint32 y_min
+uint32 x_max
+uint32 y_max
+uint32 mask_area

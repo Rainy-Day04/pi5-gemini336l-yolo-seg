@@ -1,0 +1,25 @@
+gemini336l_yolo_seg:
+  ros__parameters:
+    color_topic: /camera/color/image_raw
+    depth_topic: /camera/depth/image_raw
+    camera_info_topic: /camera/color/camera_info
+    mask_topic: ~/mask
+    detections_topic: ~/detections_2d
+    overlay_topic: ~/overlay
+    objects_3d_topic: ~/objects_3d
+
+    # Pi 5 starting point: raise to 384 only after checking temperature and FPS.
+    inference_hz: 5.0
+    imgsz: 320
+    confidence_threshold: 0.35
+    iou_threshold: 0.45
+    max_detections: 30
+    # COCO class IDs, comma-separated. Empty means all classes.
+    classes: ""
+
+    # RGB/depth are matched by timestamp; inference never blocks camera callbacks.
+    max_depth_time_delta_sec: 0.20
+    min_depth_m: 0.15
+    max_depth_m: 8.0
+    min_valid_depth_pixels: 20
+    mask_alpha: 0.45

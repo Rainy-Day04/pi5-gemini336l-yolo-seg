@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>gemini336l_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch and configuration for Gemini 336L and lightweight segmentation.</description>
+  <maintainer email="rainy-day04@users.noreply.github.com">Rainy-Day04</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>gemini336l_yolo_seg</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>orbbec_camera</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

@@ -1,0 +1,10 @@
+int32 instance_id
+int32 class_id
+string class_name
+float32 confidence
+bool position_valid
+geometry_msgs/Point position
+float32 depth_m
+uint32 pixel_u
+uint32 pixel_v
+uint32 valid_depth_pixels

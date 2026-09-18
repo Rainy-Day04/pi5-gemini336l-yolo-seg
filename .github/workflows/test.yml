@@ -1,0 +1,17 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install 'numpy<2' pytest
+      - run: python -m compileall gemini336l_yolo_seg/gemini336l_yolo_seg
+      - run: pytest -q gemini336l_yolo_seg/test/test_geometry.py
+        env:
+          PYTHONPATH: gemini336l_yolo_seg

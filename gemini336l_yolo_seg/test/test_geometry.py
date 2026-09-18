@@ -1,0 +1,27 @@
+import numpy as np
+import pytest
+from gemini336l_yolo_seg.geometry import depth_to_meters, project_mask
+
+
+def test_depth_mm_to_meters():
+    depth = np.array([[0, 1000, 2500]], dtype=np.uint16)
+    np.testing.assert_allclose(
+        depth_to_meters(depth, "16UC1"), np.array([[0.0, 1.0, 2.5]])
+    )
+
+
+def test_project_mask_at_principal_point():
+    depth = np.full((5, 5), 2.0, dtype=np.float32)
+    mask = np.zeros((5, 5), dtype=np.uint8)
+    mask[1:4, 1:4] = 1
+    result = project_mask(mask, depth, 100.0, 100.0, 2.0, 2.0, 0.1, 8.0, 3)
+    assert result is not None
+    assert (result.x, result.y, result.z) == pytest.approx((0.0, 0.0, 2.0))
+    assert result.valid_pixels == 9
+
+
+def test_project_mask_rejects_too_few_valid_pixels():
+    depth = np.zeros((3, 3), dtype=np.float32)
+    depth[1, 1] = 1.0
+    mask = np.ones((3, 3), dtype=np.uint8)
+    assert project_mask(mask, depth, 100.0, 100.0, 1.0, 1.0, 0.1, 8.0, 2) is None
