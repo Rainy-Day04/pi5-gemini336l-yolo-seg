@@ -154,6 +154,21 @@ sudo udevadm trigger
 
 不要用 `sudo ros2 launch` 绕过 udev；这会引入错误的环境和文件权限。
 
+## 升级 Gemini 336L 固件
+
+Gemini 336L 属于 Gemini 330 系列，官方当前推荐固件为 `1.8.10`。仓库提供的升级脚本会下载并校验官方固件，以及官方 SDK2 v2.9.3 ARM64 命令行升级器；不会安装 SDK 到系统，也不会修改 ROS 或底盘 workspace。
+
+先停止正在运行的 Orbbec 相机 launch，并确保相机在没有相机节点访问时不会自行反复断连。底盘节点可以继续运行。然后传入相机机身序列号：
+
+```bash
+cd ~/gemini336l_ws/src/pi5-gemini336l-yolo-seg
+./scripts/update_firmware_336l.sh CPC8763000VT
+```
+
+脚本会先列出识别到的设备，并要求再次输入同一序列号才开始写入。升级过程中可能发生一次或两次正常的 USB 重连；在程序明确完成以前不要拔线、重启或断电。升级完成后重新插拔相机，再用 SDK2 驱动确认日志中的固件版本为 `1.8.10`。
+
+如果不运行脚本，也可以从奥比中光的 [Gemini 330 系列固件页](https://www.orbbec.com/docs/g330-firmware-release/) 下载 `Gemini330_Release_1.8.10.zip`，并使用官方 SDK2 `ob_device_firmware_update` 工具升级。不要使用 Gemini 2、Gemini 340 或其他系列的 `.bin` 文件。
+
 ## 模型下载、导出和调参
 
 重新导出 320 模型：
