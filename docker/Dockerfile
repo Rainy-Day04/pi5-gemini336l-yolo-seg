@@ -28,7 +28,10 @@ RUN git clone --depth 1 --branch v2-main https://github.com/orbbec/OrbbecSDK_ROS
 COPY . /ws/src/pi5-gemini336l-yolo-seg
 
 RUN python3 -m venv --system-site-packages "${VIRTUAL_ENV}" \
-    && pip install --no-cache-dir -r /ws/src/pi5-gemini336l-yolo-seg/requirements.txt
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+        'torch==2.10.0+cpu' 'torchvision==0.25.0+cpu' \
+    && pip install --no-cache-dir -r /ws/src/pi5-gemini336l-yolo-seg/requirements.txt \
+    && python -c 'import torch; assert torch.version.cuda is None'
 RUN rosdep init 2>/dev/null || true
 RUN rosdep update \
     && . /opt/ros/${ROS_DISTRO}/setup.sh \

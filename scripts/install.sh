@@ -11,6 +11,24 @@ source_environment() {
   set -u
 }
 
+install_python_dependencies() {
+  local pytorch_cpu_index
+  pytorch_cpu_index="${PYTORCH_CPU_INDEX_URL:-https://download.pytorch.org/whl/cpu}"
+
+  python -m pip install --upgrade pip wheel
+
+  # PyPI's generic Linux ARM64 torch wheel can pull CUDA 13 and cuDNN. Pi 5
+  # has no NVIDIA GPU, so install the official CPU wheel pair first. The
+  # subsequent Ultralytics install sees these requirements as satisfied.
+  python -m pip install \
+    --index-url "${pytorch_cpu_index}" \
+    'torch==2.10.0+cpu' \
+    'torchvision==0.25.0+cpu'
+
+  python -m pip install -r "${repo_dir}/requirements.txt"
+  python -c 'import torch; assert torch.version.cuda is None; print("PyTorch CPU:", torch.__version__)'
+}
+
 update_apt_indexes() {
   if [[ "${SKIP_APT_UPDATE:-0}" == "1" ]]; then
     echo "Skipping apt index update because SKIP_APT_UPDATE=1."
@@ -154,8 +172,7 @@ if [[ ! -d "${workspace_dir}/.venv" ]]; then
   python3 -m venv --system-site-packages "${workspace_dir}/.venv"
 fi
 source_environment "${workspace_dir}/.venv/bin/activate"
-python -m pip install --upgrade pip wheel
-python -m pip install -r "${repo_dir}/requirements.txt"
+install_python_dependencies
 
 # A previously interrupted PyPI install may have left CUDA packages in this
 # dedicated venv. CPU PyTorch does not use them, so remove them to recover disk.

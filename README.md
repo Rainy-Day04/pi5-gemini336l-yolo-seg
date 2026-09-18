@@ -49,6 +49,8 @@ cd pi5-gemini336l-yolo-seg
 6. 构建 workspace；
 7. 下载 `yolo26n-seg.pt` 并导出 `320x320` NCNN 模型。
 
+安装器会先从 PyTorch 官方 CPU wheel 索引安装 `torch`/`torchvision`。不要在 Pi 5 上安装 `cuda-toolkit`、`nvidia-cudnn-cu13` 等 NVIDIA 依赖；Pi 5 的 NCNN 路径不使用 CUDA。
+
 模型导出可能需要几分钟。若只想先验证相机，可用 `SKIP_MODEL_EXPORT=1 ./scripts/install.sh ~/gemini336l_ws`。
 
 安装 udev 后拔插一次相机，然后启动：
@@ -210,6 +212,7 @@ docker/                   可选备用容器
 - **看不到相机**：拔插 USB 3 线；运行 `ros2 run orbbec_camera list_devices_node`；重装 udev。
 - **`apt update` 提示 `Mirror sync in progress`**：这是所选镜像站正在同步，不是本仓库损坏。安装脚本会自动重试；仍失败时等待镜像同步完成，或只把 ROS 2 软件源切换到另一个可信镜像后重跑。已有 apt 索引确定可用时，也可用 `SKIP_APT_UPDATE=1 ./scripts/install.sh ~/gemini336l_ws` 跳过更新。
 - **克隆 Orbbec 驱动时出现 `early EOF` / `Connection reset by peer`**：安装器会用 HTTP/1.1 自动重试，并在 GitHub 失败后切换官方 Gitee 镜像。也可直接指定：`ORBBEC_REPOSITORY_URL=https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2.git ./scripts/install.sh ~/gemini336l_ws`。不完整的目录会先改名保留，不会直接删除。
+- **pip 开始下载 `nvidia-cudnn-cu13` / `cuda-toolkit`**：立即取消并 `git pull`；新版安装器会预装官方 CPU-only PyTorch，且在继续前验证 `torch.version.cuda is None`。
 - **pip 开始下载 `nvidia-cudnn-cu13`**：立即中断并 `git pull`。Pi 5 没有 NVIDIA GPU；仓库已固定官方 CPU-only PyTorch wheel，避免下载数 GB 的 CUDA 依赖，并会清理专用 venv 中残留的 `nvidia-*-cu13` 包。
 - **无 3D 坐标**：确认 D2C 已开启、RGB/depth 尺寸一致，且 `/camera/color/camera_info` 存在。
 - **推理低于 5 FPS**：先用 320、限制 `classes`/`max_detections`、开启主动散热；确认加载的是 `_ncnn_model` 而不是 `.pt`。
