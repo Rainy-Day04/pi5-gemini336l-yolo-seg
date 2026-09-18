@@ -1,3 +1,9 @@
 # Keep NumPy 1.x for ROS 2 Humble cv_bridge compatibility.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 numpy>=1.24,<2.0
+# PyTorch 2.11+ from PyPI defaults to CUDA 13 on Linux ARM64. Pi 5 has no
+# NVIDIA GPU, so pin the official CPU wheels and avoid multi-GB CUDA packages.
+torch==2.10.0+cpu; sys_platform == "linux"
+torchvision==0.25.0+cpu; sys_platform == "linux"
 ultralytics==8.4.14

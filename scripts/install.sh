@@ -157,6 +157,25 @@ source_environment "${workspace_dir}/.venv/bin/activate"
 python -m pip install --upgrade pip wheel
 python -m pip install -r "${repo_dir}/requirements.txt"
 
+# A previously interrupted PyPI install may have left CUDA packages in this
+# dedicated venv. CPU PyTorch does not use them, so remove them to recover disk.
+mapfile -t cuda_packages < <(
+  python -m pip list --format=freeze \
+    | sed -n 's/^\(nvidia-[^=]*-cu13\)==.*/\1/p'
+)
+if (( ${#cuda_packages[@]} > 0 )); then
+  echo "Removing unused CUDA 13 packages from the Pi venv: ${cuda_packages[*]}"
+  python -m pip uninstall -y "${cuda_packages[@]}"
+fi
+
+python - <<'PY'
+import torch
+
+if torch.version.cuda is not None:
+    raise SystemExit(f"Expected CPU-only PyTorch, got CUDA build {torch.version.cuda}")
+print(f"CPU-only PyTorch ready: {torch.__version__}")
+PY
+
 if ! rosdep db >/dev/null 2>&1; then
   sudo rosdep init 2>/dev/null || true
   rosdep update
