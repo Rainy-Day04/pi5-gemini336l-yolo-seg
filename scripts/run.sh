@@ -40,6 +40,15 @@ fi
 source_environment "${workspace_dir}/.venv/bin/activate"
 source_environment "${workspace_dir}/install/setup.bash"
 
+# ROS 2 console scripts keep the Python interpreter that was used by colcon in
+# their shebang.  When that is /usr/bin/python3, merely activating the venv is
+# not enough for the node to see ultralytics and the NCNN runtime installed in
+# the workspace venv.  Make those packages visible without changing the ROS 2
+# interpreter or installing them globally.
+venv_python="${workspace_dir}/.venv/bin/python"
+venv_site_packages="$("${venv_python}" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+export PYTHONPATH="${venv_site_packages}${PYTHONPATH:+:${PYTHONPATH}}"
+
 model_path="${GEMINI336L_MODEL:-${repo_dir}/models/yolo26n-seg_ncnn_model}"
 export GEMINI336L_MODEL="${model_path}"
 
