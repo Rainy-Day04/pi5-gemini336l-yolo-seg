@@ -116,6 +116,8 @@ class SegmentationNode(Node):
             "max_depth_m": 8.0,
             "min_valid_depth_pixels": 20,
             "mask_alpha": 0.45,
+            "depth_aligned_to_color": False,
+            "show_distance_on_overlay": True,
         }
         for name, default in parameters.items():
             self.declare_parameter(name, default)
@@ -334,14 +336,21 @@ class SegmentationNode(Node):
             self.get_logger().error(f"Inference frame failed: {result.error}")
             return
 
+        objects_3d_message = self._make_3d_message(result)
+        overlay = result.overlay.copy()
+        if bool(self.get_parameter("show_distance_on_overlay").value):
+            self._draw_distance_labels(
+                overlay, result.detections, objects_3d_message
+            )
+
         mask_message = self._bridge.cv2_to_imgmsg(result.label_mask, encoding="mono16")
         mask_message.header = result.item.color.header
-        overlay_message = self._bridge.cv2_to_imgmsg(result.overlay, encoding="bgr8")
+        overlay_message = self._bridge.cv2_to_imgmsg(overlay, encoding="bgr8")
         overlay_message.header = result.item.color.header
         self._mask_pub.publish(mask_message)
         self._overlay_pub.publish(overlay_message)
         self._detections_pub.publish(self._make_2d_message(result))
-        self._objects_3d_pub.publish(self._make_3d_message(result))
+        self._objects_3d_pub.publish(objects_3d_message)
 
         if time.monotonic() - self._last_status_time > 5.0:
             self.get_logger().info(
@@ -373,7 +382,14 @@ class SegmentationNode(Node):
         depth_m: np.ndarray | None = None
         if info is not None:
             message.header.frame_id = info.header.frame_id
-        if depth_message is not None and info is not None:
+        depth_aligned = bool(self.get_parameter("depth_aligned_to_color").value)
+        if depth_message is not None and info is not None and not depth_aligned:
+            self._warn_throttled(
+                "Depth is not declared aligned to RGB; distance labels and 3D "
+                "positions are disabled. Enable Orbbec depth_registration and set "
+                "depth_aligned_to_color:=true."
+            )
+        if depth_message is not None and info is not None and depth_aligned:
             try:
                 raw_depth = self._bridge.imgmsg_to_cv2(
                     depth_message, desired_encoding="passthrough"
@@ -417,6 +433,42 @@ class SegmentationNode(Node):
                     obj.valid_depth_pixels = projection.valid_pixels
             message.objects.append(obj)
         return message
+
+    @staticmethod
+    def _draw_distance_labels(
+        overlay: np.ndarray,
+        detections: list[Detection],
+        objects_3d: Object3DArray,
+    ) -> None:
+        height, width = overlay.shape[:2]
+        for detection, obj in zip(detections, objects_3d.objects, strict=False):
+            if not obj.position_valid:
+                continue
+            text = f"distance {obj.depth_m:.2f} m"
+            x1, y1, _, _ = detection.box
+            color = SegmentationNode._color_for_class(detection.class_id)
+            (text_width, text_height), baseline = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1
+            )
+            text_x = int(np.clip(x1, 0, max(0, width - text_width - 4)))
+            text_y = int(np.clip(y1 + text_height + 6, text_height + 3, height - 3))
+            cv2.rectangle(
+                overlay,
+                (text_x, text_y - text_height - 3),
+                (text_x + text_width + 4, text_y + baseline + 2),
+                (0, 0, 0),
+                -1,
+            )
+            cv2.putText(
+                overlay,
+                text,
+                (text_x + 2, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
 
     def _warn_throttled(self, text: str) -> None:
         now = time.monotonic()

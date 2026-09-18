@@ -100,10 +100,16 @@ export ROS_DOMAIN_ID=23
 |---|---|---|
 | `/perception/gemini336l_yolo_seg/mask` | `sensor_msgs/Image` (`mono16`) | 0 为背景，1..N 为 `instance_id` |
 | `/perception/gemini336l_yolo_seg/detections_2d` | `gemini336l_msgs/Object2DArray` | 类别、置信度、bbox、mask 面积 |
-| `/perception/gemini336l_yolo_seg/overlay` | `sensor_msgs/Image` (`bgr8`) | 彩色 mask + bbox 可视化 |
+| `/perception/gemini336l_yolo_seg/overlay` | `sensor_msgs/Image` (`bgr8`) | 彩色 mask、bbox 与对齐深度距离 |
 | `/perception/gemini336l_yolo_seg/objects_3d` | `gemini336l_msgs/Object3DArray` | mask 内有效深度中值反投影的 XYZ |
 
 `objects_3d.header.frame_id` 使用 color `CameraInfo` 的 optical frame；ROS 相机坐标约定为 X 向右、Y 向下、Z 向前。每个 3D 对象都有 `position_valid`，无匹配深度时仍保留分类结果但置为 false。
+
+距离取每个实例 mask 内有效对齐深度的中位数，并显示为 `distance 1.23 m`。单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
+
+```bash
+./scripts/run.sh perception ~/gemini336l_ws depth_aligned_to_color:=true
+```
 
 运行后检查：
 

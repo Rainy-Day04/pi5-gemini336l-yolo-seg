@@ -8,6 +8,7 @@ from launch.substitutions import (
     PathJoinSubstitution,
 )
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -34,6 +35,11 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "camera_info_topic", default_value="/camera/color/camera_info"
             ),
+            DeclareLaunchArgument(
+                "depth_aligned_to_color",
+                default_value="false",
+                description="Set true only when the Orbbec driver aligns depth to color.",
+            ),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -48,6 +54,10 @@ def generate_launch_description():
                         "color_topic": LaunchConfiguration("color_topic"),
                         "depth_topic": LaunchConfiguration("depth_topic"),
                         "camera_info_topic": LaunchConfiguration("camera_info_topic"),
+                        "depth_aligned_to_color": ParameterValue(
+                            LaunchConfiguration("depth_aligned_to_color"),
+                            value_type=bool,
+                        ),
                     },
                 ],
             ),

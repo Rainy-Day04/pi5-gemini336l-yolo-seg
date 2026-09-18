@@ -23,3 +23,6 @@ gemini336l_yolo_seg:
     max_depth_m: 8.0
     min_valid_depth_pixels: 20
     mask_alpha: 0.45
+    # Kept false for perception-only launches until Orbbec D2C is explicitly enabled.
+    depth_aligned_to_color: false
+    show_distance_on_overlay: true

@@ -52,7 +52,12 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution([launch_dir, "perception.launch.py"])
                 ),
-                launch_arguments={"model": model}.items(),
+                launch_arguments={
+                    "model": model,
+                    "depth_aligned_to_color": LaunchConfiguration(
+                        "depth_registration"
+                    ),
+                }.items(),
             ),
         ]
     )
