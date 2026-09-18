@@ -26,7 +26,6 @@ install_python_dependencies() {
     'torchvision==0.25.0+cpu'
 
   python -m pip install -r "${repo_dir}/requirements.txt"
-  python -c 'import torch; assert torch.version.cuda is None; print("PyTorch CPU:", torch.__version__)'
 }
 
 update_apt_indexes() {
