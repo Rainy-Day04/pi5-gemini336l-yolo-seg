@@ -13,6 +13,10 @@ def generate_launch_description():
     align_mode = LaunchConfiguration("align_mode")
     enable_frame_sync = LaunchConfiguration("enable_frame_sync")
     enable_ir_auto_exposure = LaunchConfiguration("enable_ir_auto_exposure")
+    enable_noise_removal_filter = LaunchConfiguration("enable_noise_removal_filter")
+    enable_hardware_noise_removal_filter = LaunchConfiguration(
+        "enable_hardware_noise_removal_filter"
+    )
     enable_point_cloud = LaunchConfiguration("enable_point_cloud")
     enable_colored_point_cloud = LaunchConfiguration("enable_colored_point_cloud")
     driver_launch = PathJoinSubstitution(
@@ -29,6 +33,10 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_frame_sync", default_value="false"),
             DeclareLaunchArgument("enable_ir_auto_exposure", default_value="false"),
+            DeclareLaunchArgument("enable_noise_removal_filter", default_value="false"),
+            DeclareLaunchArgument(
+                "enable_hardware_noise_removal_filter", default_value="false"
+            ),
             DeclareLaunchArgument("enable_point_cloud", default_value="true"),
             DeclareLaunchArgument("enable_colored_point_cloud", default_value="false"),
             IncludeLaunchDescription(
@@ -51,6 +59,8 @@ def generate_launch_description():
                     "frame_aggregate_mode": "full_frame",
                     "enable_frame_sync": enable_frame_sync,
                     "enable_ir_auto_exposure": enable_ir_auto_exposure,
+                    "enable_noise_removal_filter": enable_noise_removal_filter,
+                    "enable_hardware_noise_removal_filter": enable_hardware_noise_removal_filter,
                     "enable_point_cloud": enable_point_cloud,
                     "enable_colored_point_cloud": enable_colored_point_cloud,
                     "enable_publish_extrinsic": "true",

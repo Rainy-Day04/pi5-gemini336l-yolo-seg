@@ -121,7 +121,7 @@ source ~/gemini336l_ws/install/setup.bash
 ros2 launch orbbec_camera gemini_330_series.launch.py
 ```
 
-本仓库的 `camera.launch.py` 额外启用 D2C 和 depth point cloud。为兼容旧固件及部分 ARM64 USB 控制器，默认使用 `SW` 对齐，并关闭 frame sync 与 IR auto exposure；升级至官方推荐固件并确认 USB 稳定后可按需重新启用：
+本仓库的 `camera.launch.py` 额外启用 D2C 和 depth point cloud。为兼容部分 336L 配置并降低 Pi 5 CPU 负载，默认关闭软件/硬件 noise removal filter；同时默认使用 `SW` 对齐，并关闭 frame sync 与 IR auto exposure。升级至官方推荐固件并确认 USB 稳定后可按需重新启用同步和硬件对齐：
 
 ```bash
 ./scripts/run.sh all ~/gemini336l_ws \
