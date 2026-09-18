@@ -103,6 +103,46 @@ clone_orbbec_driver() {
   return 1
 }
 
+materialize_orbbec_filter_plugins() {
+  local driver_dir="$1"
+  local architecture
+  local source_dir
+  local destination_dir
+  local plugin
+  local temporary_file
+
+  case "$(uname -m)" in
+    aarch64|arm64) architecture="arm64" ;;
+    x86_64|amd64) architecture="x64" ;;
+    *)
+      echo "Skipping Orbbec filter materialization on unsupported architecture: $(uname -m)" >&2
+      return 0
+      ;;
+  esac
+
+  source_dir="${driver_dir}/orbbec_camera/SDK/lib/${architecture}/extensions/filters"
+  destination_dir="${workspace_dir}/install/orbbec_camera/lib/extensions/filters"
+  if [[ ! -d "${source_dir}" || ! -d "${destination_dir}" ]]; then
+    return 0
+  fi
+
+  # OrbbecSDK enumerates private filters with dirent.d_type == DT_REG. Ament's
+  # --symlink-install turns these libraries into DT_LNK entries, so the SDK
+  # silently skips them even though dlopen/ctypes can follow the links. Replace
+  # only the two enumerated filter packages with regular files after the build.
+  for plugin in libFilterProcessor.so libob_priv_filter.so; do
+    if [[ ! -e "${source_dir}/${plugin}" ]]; then
+      echo "Required Orbbec filter plugin is missing: ${source_dir}/${plugin}" >&2
+      return 1
+    fi
+    temporary_file="${destination_dir}/.${plugin}.regular.$$"
+    cp -L -p "${source_dir}/${plugin}" "${temporary_file}"
+    mv -f -- "${temporary_file}" "${destination_dir}/${plugin}"
+  done
+
+  echo "Orbbec private filter plugins installed as regular files."
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "$(basename "$(dirname "${repo_dir}")")" == "src" ]]; then
   default_workspace="$(cd "${repo_dir}/../.." && pwd)"
@@ -154,8 +194,8 @@ if [[ "$(cd "${workspace_dir}/src" && pwd)" != "$(dirname "${repo_dir}")" ]]; th
   fi
 fi
 
+driver_dir="${workspace_dir}/src/OrbbecSDK_ROS2"
 if ! ros2 pkg prefix orbbec_camera >/dev/null 2>&1; then
-  driver_dir="${workspace_dir}/src/OrbbecSDK_ROS2"
   clone_orbbec_driver "${driver_dir}"
   sudo bash "${driver_dir}/orbbec_camera/scripts/install_udev_rules.sh"
 else
@@ -208,6 +248,7 @@ rosdep install --from-paths "${workspace_dir}/src" --ignore-src -r -y \
 cd "${workspace_dir}"
 colcon build --symlink-install --event-handlers console_direct+ \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
+materialize_orbbec_filter_plugins "${driver_dir}"
 
 if [[ "${SKIP_MODEL_EXPORT:-0}" != "1" ]]; then
   "${repo_dir}/scripts/prepare_model.sh" "${workspace_dir}" 320

@@ -240,6 +240,19 @@ docker/                   可选备用容器
 
 ## 故障排查
 
+### SDK2 报 `G330FrameUnpacker` / `depth frame processor status:114`
+
+OrbbecSDK 在 Linux 上只扫描扩展目录中的普通文件。`colcon --symlink-install`
+会把私有滤镜库安装为软链接，因此文件虽然能被 `ldd`/`ctypes` 加载，
+仍会被 SDK 枚举器忽略。安装器已自动将这两个插件转换为普通文件。
+既有 workspace 可直接修复，无需重编译：
+
+```bash
+./scripts/fix_orbbec_symlink_plugins.sh ~/gemini336l_ws
+```
+
+修复后脚本必须显示两个 `regular file`，然后重启相机进程。
+
 ### 固件 1.4.60 与 SDK2 v2.4.3 报 `NoiseRemovalFilter#1 doesn't exist`
 
 部分 Gemini 336L 会报告旧版降噪属性，但相机中没有对应的可选滤波配置。
