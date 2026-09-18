@@ -121,11 +121,27 @@ source ~/gemini336l_ws/install/setup.bash
 ros2 launch orbbec_camera gemini_330_series.launch.py
 ```
 
-本仓库的 `camera.launch.py` 额外启用 D2C、frame sync 和 depth point cloud，默认 `HW` 对齐。若相机报告当前 profile 不支持硬件 D2C：
+本仓库的 `camera.launch.py` 额外启用 D2C 和 depth point cloud。为兼容旧固件及部分 ARM64 USB 控制器，默认使用 `SW` 对齐，并关闭 frame sync 与 IR auto exposure；升级至官方推荐固件并确认 USB 稳定后可按需重新启用：
 
 ```bash
-./scripts/run.sh all ~/gemini336l_ws align_mode:=SW
+./scripts/run.sh all ~/gemini336l_ws \
+  align_mode:=HW \
+  enable_frame_sync:=true \
+  enable_ir_auto_exposure:=true
 ```
+
+如果相机反复出现 `Device is deactivated/disconnected status:108`，先运行最小相机模式：
+
+```bash
+./scripts/run.sh camera ~/gemini336l_ws \
+  depth_registration:=false \
+  align_mode:=SW \
+  enable_frame_sync:=false \
+  enable_ir_auto_exposure:=false \
+  enable_point_cloud:=false
+```
+
+最小模式稳定而完整模式不稳定，通常是旧固件或某个高级功能的兼容问题；最小模式仍重连则优先排查 USB 线、供电、Hub/USB 控制器，并查看内核 USB 日志。
 
 手动安装 udev 规则：
 

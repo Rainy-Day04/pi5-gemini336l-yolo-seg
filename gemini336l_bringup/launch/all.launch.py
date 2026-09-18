@@ -25,7 +25,10 @@ def generate_launch_description():
                     "GEMINI336L_MODEL", default_value="yolo26n-seg.pt"
                 ),
             ),
-            DeclareLaunchArgument("align_mode", default_value="HW"),
+            DeclareLaunchArgument("depth_registration", default_value="true"),
+            DeclareLaunchArgument("align_mode", default_value="SW"),
+            DeclareLaunchArgument("enable_frame_sync", default_value="false"),
+            DeclareLaunchArgument("enable_ir_auto_exposure", default_value="false"),
             DeclareLaunchArgument("enable_point_cloud", default_value="true"),
             DeclareLaunchArgument("enable_colored_point_cloud", default_value="false"),
             IncludeLaunchDescription(
@@ -33,7 +36,12 @@ def generate_launch_description():
                     PathJoinSubstitution([launch_dir, "camera.launch.py"])
                 ),
                 launch_arguments={
+                    "depth_registration": LaunchConfiguration("depth_registration"),
                     "align_mode": align_mode,
+                    "enable_frame_sync": LaunchConfiguration("enable_frame_sync"),
+                    "enable_ir_auto_exposure": LaunchConfiguration(
+                        "enable_ir_auto_exposure"
+                    ),
                     "enable_point_cloud": LaunchConfiguration("enable_point_cloud"),
                     "enable_colored_point_cloud": LaunchConfiguration(
                         "enable_colored_point_cloud"
