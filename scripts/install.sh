@@ -11,6 +11,29 @@ source_environment() {
   set -u
 }
 
+update_apt_indexes() {
+  if [[ "${SKIP_APT_UPDATE:-0}" == "1" ]]; then
+    echo "Skipping apt index update because SKIP_APT_UPDATE=1."
+    return 0
+  fi
+
+  local attempt
+  for attempt in 1 2 3; do
+    echo "Updating apt indexes (attempt ${attempt}/3)..."
+    if sudo apt-get update; then
+      return 0
+    fi
+    if (( attempt < 3 )); then
+      echo "apt update failed; the mirror may be synchronizing. Retrying shortly..." >&2
+      sleep $((attempt * 5))
+    fi
+  done
+
+  echo "apt indexes could not be updated after 3 attempts." >&2
+  echo "If the error says 'Mirror sync in progress', wait or change only the ROS 2 mirror, then rerun this installer." >&2
+  return 1
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "$(basename "$(dirname "${repo_dir}")")" == "src" ]]; then
   default_workspace="$(cd "${repo_dir}/../.." && pwd)"
@@ -37,7 +60,7 @@ if [[ -z "${ROS_DISTRO:-}" || ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
 fi
 source_environment "/opt/ros/${ROS_DISTRO}/setup.bash"
 
-sudo apt-get update
+update_apt_indexes
 sudo apt-get install -y \
   build-essential cmake git libdw-dev libgflags-dev libgl1 libgoogle-glog-dev \
   libssl-dev libusb-1.0-0-dev mesa-utils nlohmann-json3-dev \

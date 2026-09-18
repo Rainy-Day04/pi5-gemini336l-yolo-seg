@@ -208,6 +208,7 @@ docker/                   可选备用容器
 ## 故障排查
 
 - **看不到相机**：拔插 USB 3 线；运行 `ros2 run orbbec_camera list_devices_node`；重装 udev。
+- **`apt update` 提示 `Mirror sync in progress`**：这是所选镜像站正在同步，不是本仓库损坏。安装脚本会自动重试；仍失败时等待镜像同步完成，或只把 ROS 2 软件源切换到另一个可信镜像后重跑。已有 apt 索引确定可用时，也可用 `SKIP_APT_UPDATE=1 ./scripts/install.sh ~/gemini336l_ws` 跳过更新。
 - **无 3D 坐标**：确认 D2C 已开启、RGB/depth 尺寸一致，且 `/camera/color/camera_info` 存在。
 - **推理低于 5 FPS**：先用 320、限制 `classes`/`max_detections`、开启主动散热；确认加载的是 `_ncnn_model` 而不是 `.pt`。
 - **底盘节点互相不可见**：两边检查 `echo $ROS_DOMAIN_ID` 与 `echo $RMW_IMPLEMENTATION`。
