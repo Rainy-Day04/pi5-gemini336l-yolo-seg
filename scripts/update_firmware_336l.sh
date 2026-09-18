@@ -4,7 +4,7 @@ set -euo pipefail
 readonly firmware_version="1.8.10"
 readonly sdk_version="2.9.3"
 readonly sdk_archive="OrbbecSDK_v2.9.3_202607151523_2f6561c_linux_arm64.tar.gz"
-readonly sdk_url="https://github.com/orbbec/OrbbecSDK_v2/releases/download/v${sdk_version}/${sdk_archive}"
+readonly sdk_url="https://gitee.com/orbbecdeveloper/OrbbecSDK_v2/releases/download/v${sdk_version}/${sdk_archive}"
 readonly sdk_sha256="ce2c476c283b932181b04daf44debadff9e4a743344bd69eecf34f8c18009ac1"
 readonly firmware_archive="Gemini330_Release_${firmware_version}.zip"
 readonly firmware_url="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/${firmware_archive}"
