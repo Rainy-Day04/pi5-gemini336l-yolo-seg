@@ -177,12 +177,18 @@ install_python_dependencies
 # dedicated venv. CPU PyTorch does not use them, so remove them to recover disk.
 mapfile -t cuda_packages < <(
   python -m pip list --format=freeze \
-    | sed -n 's/^\(nvidia-[^=]*-cu13\)==.*/\1/p'
+    | sed -n -E \
+      's/^((nvidia-[^=]+-cu[0-9]+|cuda-(toolkit|bindings|pathfinder)))==.*/\1/p'
 )
 if (( ${#cuda_packages[@]} > 0 )); then
-  echo "Removing unused CUDA 13 packages from the Pi venv: ${cuda_packages[*]}"
+  echo "Removing unused CUDA packages from the Pi venv: ${cuda_packages[*]}"
   python -m pip uninstall -y "${cuda_packages[@]}"
 fi
+
+# Remove only CUDA/NVIDIA wheels from pip's download cache. Keep the useful
+# OpenCV, NumPy and Ultralytics wheels so interrupted installs can resume fast.
+python -m pip cache remove 'nvidia-*' >/dev/null 2>&1 || true
+python -m pip cache remove 'cuda-*' >/dev/null 2>&1 || true
 
 python - <<'PY'
 import torch
