@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source_environment() {
+  local setup_file="$1"
+  # ROS 2 Jazzy setup files read AMENT_TRACE_SETUP_FILES before defining it.
+  # Temporarily relax nounset, then restore the installer's strict mode.
+  set +u
+  # shellcheck disable=SC1090
+  source "${setup_file}"
+  set -u
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ "$(basename "$(dirname "${repo_dir}")")" == "src" ]]; then
   default_workspace="$(cd "${repo_dir}/../.." && pwd)"
@@ -25,7 +35,7 @@ if [[ -z "${ROS_DISTRO:-}" || ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
   echo "ROS 2 Humble or Jazzy must already be installed under /opt/ros." >&2
   exit 1
 fi
-source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source_environment "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 sudo apt-get update
 sudo apt-get install -y \
@@ -71,7 +81,7 @@ sudo udevadm trigger
 if [[ ! -d "${workspace_dir}/.venv" ]]; then
   python3 -m venv --system-site-packages "${workspace_dir}/.venv"
 fi
-source "${workspace_dir}/.venv/bin/activate"
+source_environment "${workspace_dir}/.venv/bin/activate"
 python -m pip install --upgrade pip wheel
 python -m pip install -r "${repo_dir}/requirements.txt"
 

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source_environment() {
+  local setup_file="$1"
+  set +u
+  # shellcheck disable=SC1090
+  source "${setup_file}"
+  set -u
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace_dir="${1:-$(cd "${repo_dir}/../.." 2>/dev/null && pwd)}"
 image_size="${2:-320}"
@@ -10,7 +18,7 @@ if [[ ! -d "${workspace_dir}/.venv" ]]; then
   exit 1
 fi
 
-source "${workspace_dir}/.venv/bin/activate"
+source_environment "${workspace_dir}/.venv/bin/activate"
 mkdir -p "${repo_dir}/models"
 cd "${repo_dir}/models"
 

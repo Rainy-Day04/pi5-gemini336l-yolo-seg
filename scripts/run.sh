@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source_environment() {
+  local setup_file="$1"
+  set +u
+  # shellcheck disable=SC1090
+  source "${setup_file}"
+  set -u
+}
+
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-all}"
 if [[ "$(basename "$(dirname "${repo_dir}")")" == "src" ]]; then
@@ -24,13 +32,13 @@ if [[ -z "${ROS_DISTRO:-}" || ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
   echo "ROS 2 Humble or Jazzy must already be installed under /opt/ros." >&2
   exit 1
 fi
-source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source_environment "/opt/ros/${ROS_DISTRO}/setup.bash"
 if [[ ! -f "${workspace_dir}/.venv/bin/activate" || ! -f "${workspace_dir}/install/setup.bash" ]]; then
   echo "Workspace is not installed: ${workspace_dir}. Run scripts/install.sh first." >&2
   exit 1
 fi
-source "${workspace_dir}/.venv/bin/activate"
-source "${workspace_dir}/install/setup.bash"
+source_environment "${workspace_dir}/.venv/bin/activate"
+source_environment "${workspace_dir}/install/setup.bash"
 
 model_path="${GEMINI336L_MODEL:-${repo_dir}/models/yolo26n-seg_ncnn_model}"
 export GEMINI336L_MODEL="${model_path}"
