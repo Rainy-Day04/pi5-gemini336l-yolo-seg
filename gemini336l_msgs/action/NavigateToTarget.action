@@ -1,0 +1,17 @@
+# Implemented by the navigation teammate at /navigation/approach_target.
+# Object world_point is NOT a robot goal pose. Choose a collision-free stopping
+# pose around the object, facing it. Arm reach/approach must still be checked.
+gemini336l_msgs/Target target
+float32 stand_off_m
+float32 position_tolerance_m
+float32 yaw_tolerance_rad
+---
+# success only after navigation terminates and the chassis has stopped.
+bool success
+# STOP_NOT_CONFIRMED means physical stop failed; caller must require intervention.
+string code
+string message
+geometry_msgs/PoseStamped reached_base_pose
+---
+string phase
+float32 remaining_distance_m

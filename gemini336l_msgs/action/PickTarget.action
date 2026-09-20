@@ -1,0 +1,12 @@
+# Implemented by arm adapter at /arm_perception/pick_target.
+# Refreshed after navigation. Never silently substitute a different object.
+gemini336l_msgs/Target target
+---
+# success means the commanded sequence completed, not necessarily a held object.
+bool success
+bool grasp_verified
+# HOLD_FAILED means hardware hold could not be confirmed; caller must stay locked.
+string code
+string message
+---
+string phase

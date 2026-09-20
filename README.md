@@ -258,12 +258,42 @@ docker build -f docker/Dockerfile -t gemini336l-perception:local .
 
 Docker 方案使用 `--privileged --network host`，安全边界更宽，而且相机 USB 重连和 DDS 排查更复杂，所以不是默认交付形式。
 
+## 多人协作接口：选物 → 导航靠近 → 抓取
+
+给导航/前端同学直接看 **[完整接口约定与两侧启动命令](docs/team-interfaces.md)**。
+采用通用 ROS 2，不绑定 Nav2，不改已有底盘 workspace，也不发布 `/cmd_vel`。
+
+| 模块 | 对接入口 | 当前交付 |
+|---|---|---|
+| 选定目标 | `/robot_task/select_target` | 按图像时间戳 + 实例编号选择，生成任务目标 UUID |
+| 执行任务 | `/robot_task/start`、`/robot_task/status`、`/robot_task/cancel` | 导航、停稳、重新观测、抓取的协调器 |
+| LiDAR 导航 | `/navigation/approach_target` | 消息/Action + 无运动模板，由导航同学接入自己的导航 |
+| 机械臂 | `/arm_perception/pick_target` | 复用现有 HTTP 驱动的适配器，不新增串口占用 |
+
+只构建团队接口和适配节点，不重新下载模型/重编译相机：
+
+```bash
+./scripts/build_team_interfaces.sh ~/robot_team_ws
+source /opt/ros/jazzy/setup.bash
+source ~/robot_team_ws/install/setup.bash
+ros2 launch robot_task_coordinator task.launch.py
+```
+
+默认 `motion_enabled=false`、`calibration_confirmed=false`，只允许选目标/检查接口。
+真实导航后端、外参、臂展和安全检查尚需对应同学接入/实测，不能仅打开开关就当作完成标定。
+底盘停稳后必须取得新的观测；目标缺失/歧义、旧时间戳或丢失运动反馈时不进入抓取。
+完成动作但没有夹持传感器确认时只返回 `SEQUENCE_COMPLETE`。
+
 ## 仓库结构
 
 ```text
-gemini336l_msgs/          自定义 2D/3D ROS interfaces
+gemini336l_msgs/          2D/3D、目标、任务状态与导航/抓取 Action
 gemini336l_yolo_seg/      非阻塞分割与 RGB-D 投影节点
 gemini336l_bringup/       camera/perception/all launch 与 Pi 5 参数
+robot_task_coordinator/   选定目标、导航到抓取的任务协调器（默认不运动）
+times_arm_perception/    现有机械臂 HTTP 服务适配与 PickTarget Action
+examples/                 导航同学接入自己后端的模板
+docs/team-interfaces.md   多人对接协议与启动/联调说明
 scripts/                  安装、模型导出、启动、健康检查
 docker/                   可选备用容器
 ```

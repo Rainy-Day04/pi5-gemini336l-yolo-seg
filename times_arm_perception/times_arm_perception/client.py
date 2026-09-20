@@ -11,6 +11,10 @@ import numpy as np
 from .core import feedback, vector
 
 
+class HoldFailedError(RuntimeError):
+    """An attempted stop could not be confirmed by the existing HTTP service."""
+
+
 class ArmClient:
     def __init__(self, base_url, timeout=0.5, write_enabled=False):
         if not base_url.startswith(("http://", "https://")):
@@ -95,6 +99,8 @@ def run_plan(client, plan, cfg, cancel, report):
                 ):
                     raise ValueError("Arm velocity was changed externally")
                 command = command + np.clip(target - command, -max_step, max_step)
+                if cancel.is_set():
+                    raise ValueError("Canceled; requesting current-position hold")
                 client.request("/api/axes", {"degrees": command.tolist()})
                 reached_command = np.max(np.abs(target - command)) < 1e-6
                 reached_actual = (
@@ -109,13 +115,15 @@ def run_plan(client, plan, cfg, cancel, report):
                     if time.monotonic() - grip_wait_started >= cfg.gripper_settle_sec:
                         break
                 cancel.wait(cfg.control_period_sec)
+        if cancel.is_set():
+            raise ValueError("Canceled; requesting current-position hold")
         report("complete: commanded sequence finished; grasp success not verified")
     except Exception as exc:
         if wrote:
             try:
                 client.request("/api/hold", {})
             except Exception as hold_error:  # noqa: BLE001 - report both failures at the execution boundary
-                raise RuntimeError(
+                raise HoldFailedError(
                     f"{exc}; hold request also failed: {hold_error}"
                 ) from exc
         raise

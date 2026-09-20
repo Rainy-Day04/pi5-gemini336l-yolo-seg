@@ -1,0 +1,31 @@
+robot_task:
+  ros__parameters:
+    # Leave false until camera/base extrinsics, localization, stopping distance,
+    # arm model and safety/controller ownership have all been checked on hardware.
+    motion_enabled: false
+    calibration_confirmed: false
+    objects_topic: /perception/gemini336l_yolo_seg/objects_3d
+    odom_topic: /odom
+    navigation_action: /navigation/approach_target
+    pick_action: /arm_perception/pick_target
+    world_frame: map
+    base_frame: base_link
+    # EXAMPLE ONLY, not a measured reachability guarantee. Configure together
+    # with the navigation teammate after actual arm/camera mounting is known.
+    stand_off_m: 0.35
+    position_tolerance_m: 0.05
+    yaw_tolerance_rad: 0.15
+    min_confidence: 0.5
+    observation_max_age_sec: 1.0
+    selection_timeout_sec: 30.0
+    association_radius_m: 0.06
+    confirmation_frames: 2
+    odom_max_age_sec: 0.5
+    stopped_linear_mps: 0.02
+    stopped_angular_rps: 0.03
+    stop_settle_sec: 1.0
+    navigation_timeout_sec: 120.0
+    stop_timeout_sec: 10.0
+    reacquire_timeout_sec: 8.0
+    pick_timeout_sec: 60.0
+    cancel_timeout_sec: 5.0

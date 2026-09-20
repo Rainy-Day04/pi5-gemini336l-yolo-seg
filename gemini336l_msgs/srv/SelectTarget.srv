@@ -1,0 +1,8 @@
+# Select exactly one Object3D from a recently received Object3DArray.
+# IDs repeat each frame. Zero/latest timestamps are deliberately NOT accepted.
+builtin_interfaces/Time observation_stamp
+int32 instance_id
+---
+bool accepted
+string message
+gemini336l_msgs/Target target

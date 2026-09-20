@@ -21,7 +21,7 @@ cp -n times_arm_perception/config/arm.pending.yaml ~/robot_config/arm.yaml
   mode:=preview config:="$HOME/robot_config/arm.yaml"
 ```
 
-编译脚本只构建新包，依赖使用已有 workspace 的 `gemini336l_msgs`。
+编译脚本只构建接口、任务协调器和机械臂适配器，包括新增 Action 所需的 `gemini336l_msgs`；不会重编译相机或底盘。
 它不重编译 Orbbec、不更新模型、不重建机械臂容器。`cp -n` 保留已有个人参数文件；
 以后 `git pull` 不会覆盖 `~/robot_config/arm.yaml`。
 
@@ -148,3 +148,10 @@ TCP 工作范围检查，没有完整臂体自碰撞/环境碰撞规划，也没
 本次还修复了 3D 坐标转换时共享 RGB header 的问题：更新 3D frame 不再影响 overlay
 的 frame，TF 查询使用观测时间而非最新时间。更新后重启 YOLO 即可加载 symlink-install
 中的 Python 修复。
+
+## 自动导航交接入口
+
+多人集成使用新增的 `/arm_perception/pick_target` Action，协议见
+[团队对接文档](team-interfaces.md)。它按任务指定目标执行，不使用手工 `plan` 服务的“当前最近目标”选择。
+旧安装升级时运行 `scripts/build_arm_adapter.sh` 会一起重新构建 Action 消息；不用重装相机或 YOLO。
+`mode:=execute` 和两项标定确认仍必需，默认 preview 不接受抓取任务。

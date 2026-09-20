@@ -33,12 +33,23 @@ if [[ -z "${ROS_DISTRO:-}" || ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
   exit 1
 fi
 source_environment "/opt/ros/${ROS_DISTRO}/setup.bash"
-if [[ ! -f "${workspace_dir}/.venv/bin/activate" || ! -f "${workspace_dir}/install/setup.bash" ]]; then
+if [[ ! -f "${workspace_dir}/install/setup.bash" ]]; then
   echo "Workspace is not installed: ${workspace_dir}. Run scripts/install.sh first." >&2
   exit 1
 fi
-source_environment "${workspace_dir}/.venv/bin/activate"
 source_environment "${workspace_dir}/install/setup.bash"
+
+# Team interfaces and arm API adapter use native ROS packages only. They must
+# also work in a separate MiniPC workspace without YOLO, Orbbec or a venv.
+case "${mode}" in
+  arm) exec ros2 launch times_arm_perception integration.launch.py "$@" ;;
+  task) exec ros2 launch robot_task_coordinator task.launch.py "$@" ;;
+esac
+if [[ ! -f "${workspace_dir}/.venv/bin/activate" ]]; then
+  echo "Perception venv missing. Run scripts/install.sh first." >&2
+  exit 1
+fi
+source_environment "${workspace_dir}/.venv/bin/activate"
 
 # ROS 2 console scripts keep the Python interpreter that was used by colcon in
 # their shebang.  When that is /usr/bin/python3, merely activating the venv is
@@ -62,11 +73,8 @@ case "${mode}" in
   perception)
     exec ros2 launch gemini336l_bringup perception.launch.py model:="${model_path}" "$@"
     ;;
-  arm)
-    exec ros2 launch times_arm_perception integration.launch.py "$@"
-    ;;
   *)
-    echo "Usage: $0 [all|camera|perception|arm] [workspace] [launch arguments...]" >&2
+    echo "Usage: $0 [all|camera|perception|arm|task] [workspace] [launch arguments...]" >&2
     exit 2
     ;;
 esac

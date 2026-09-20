@@ -1,0 +1,6 @@
+# Must match the most recently selected target UUID.
+string target_id
+---
+bool accepted
+string task_id
+string message

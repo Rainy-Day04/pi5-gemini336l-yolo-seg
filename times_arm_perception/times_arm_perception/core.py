@@ -348,3 +348,21 @@ def validate_execution(plan, current_targets, state, cfg, now):
     ]
     if not matching:
         raise ValueError("Target disappeared/moved; replan")
+
+
+def match_pinned_target(selected, current_targets, cfg):
+    """Reacquire an explicit target; frame-local instance IDs are not tracking IDs."""
+    matches = [
+        candidate
+        for candidate in current_targets
+        if candidate["class_id"] == selected["class_id"]
+        and candidate["class_name"] == selected["class_name"]
+        and candidate["frame_id"] == cfg.arm_base_frame
+        and np.linalg.norm(vector(candidate["xyz"], 3) - vector(selected["xyz"], 3))
+        <= cfg.target_drift_m
+    ]
+    if not matches:
+        raise ValueError("Selected target is absent or outside target_drift_m")
+    if len(matches) != 1:
+        raise ValueError("Selected target is ambiguous: multiple observations in gate")
+    return {**matches[0], "target_id": selected["target_id"]}

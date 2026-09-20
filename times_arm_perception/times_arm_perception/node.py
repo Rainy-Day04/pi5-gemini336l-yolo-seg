@@ -11,6 +11,9 @@ import numpy as np
 import rclpy
 from geometry_msgs.msg import PointStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
@@ -19,10 +22,37 @@ from std_srvs.srv import Trigger
 from tf2_geometry_msgs import do_transform_point
 from tf2_ros import Buffer, StaticTransformBroadcaster, TransformListener
 
+from gemini336l_msgs.action import PickTarget
 from gemini336l_msgs.msg import Object3DArray
 
-from .client import ArmClient, run_plan
-from .core import Settings, feedback, make_plan, validate_execution, vector
+from .client import ArmClient, HoldFailedError, run_plan
+from .core import (
+    Settings,
+    feedback,
+    make_plan,
+    match_pinned_target,
+    validate_execution,
+    vector,
+)
+
+
+class ActionCancellation:
+    """Observe accepted action cancellation as well as the existing cancel service."""
+
+    def __init__(self, event, goal):
+        self.event, self.goal = event, goal
+
+    def is_set(self):
+        return self.event.is_set() or self.goal.is_cancel_requested
+
+    def wait(self, timeout):
+        deadline = time.monotonic() + timeout
+        while not self.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            self.event.wait(min(0.05, remaining))
+        return self.is_set()
 
 
 class Coordinator(Node):
@@ -80,6 +110,10 @@ class Coordinator(Node):
         self.busy = False
         self.phase = "preview"
         self.work_thread = None
+        self.active_goal = None
+        self.action_cancel_pending = threading.Event()
+        self.action_done = threading.Event()
+        self.action_done.set()
         self.status_pub = self.create_publisher(String, "~/status", 10)
         self.targets_pub = self.create_publisher(Object3DArray, "~/targets", 10)
         self.plan_pub = self.create_publisher(String, "~/plan", 10)
@@ -90,6 +124,17 @@ class Coordinator(Node):
         self.create_service(Trigger, "~/plan", self._plan)
         self.create_service(Trigger, "~/execute", self._execute)
         self.create_service(Trigger, "~/cancel", self._cancel)
+        self.action_group = ReentrantCallbackGroup()
+        self.pick_server = ActionServer(
+            self,
+            PickTarget,
+            "~/pick_target",
+            self._pick_execute,
+            goal_callback=self._pick_goal,
+            cancel_callback=self._pick_cancel,
+            handle_accepted_callback=self._pick_accepted,
+            callback_group=self.action_group,
+        )
         self.create_timer(1 / self.cfg.poll_hz, self._tick)
         self.poll_thread = threading.Thread(target=self._poll, daemon=True)
         self.poll_thread.start()
@@ -98,8 +143,9 @@ class Coordinator(Node):
         )
 
     def _objects(self, msg):
-        self.latest_objects = msg
-        self.objects_received = time.monotonic()
+        with self.lock:
+            self.latest_objects = msg
+            self.objects_received = time.monotonic()
 
     def _poll(self):
         while not self.shutdown_event.is_set():
@@ -117,7 +163,8 @@ class Coordinator(Node):
             self.shutdown_event.wait(1 / self.cfg.poll_hz)
 
     def _targets(self):
-        msg = self.latest_objects
+        with self.lock:
+            msg, received = self.latest_objects, self.objects_received
         if msg is None:
             raise ValueError("waiting for objects_3d")
         age = (
@@ -126,7 +173,7 @@ class Coordinator(Node):
         ) / 1e9
         if (
             not -0.1 <= age <= self.cfg.target_max_age_sec
-            or time.monotonic() - self.objects_received > self.cfg.target_max_age_sec
+            or time.monotonic() - received > self.cfg.target_max_age_sec
         ):
             raise ValueError("objects_3d is stale or clocks are not synchronized")
         if not msg.header.frame_id or Time.from_msg(msg.header.stamp).nanoseconds == 0:
@@ -314,9 +361,153 @@ class Coordinator(Node):
         )
         return response
 
+    def _pinned_target(self, target):
+        if not target.target_id.strip() or not target.class_name.strip():
+            raise ValueError("PickTarget requires target_id and class_name")
+        if not self.cfg.min_confidence <= target.confidence <= 1.0:
+            raise ValueError("Selected target confidence is invalid or too low")
+        point = target.world_point
+        stamp = Time.from_msg(point.header.stamp)
+        age = (self.get_clock().now().nanoseconds - stamp.nanoseconds) / 1e9
+        if not point.header.frame_id or stamp.nanoseconds == 0:
+            raise ValueError(
+                "Selected target requires a world_point frame and observation stamp"
+            )
+        if not -0.1 <= age <= self.cfg.target_max_age_sec:
+            raise ValueError("Selected target is stale; reacquire after navigation")
+        if point.header.frame_id != self.cfg.arm_base_frame:
+            transform = self.buffer.lookup_transform(
+                self.cfg.arm_base_frame,
+                point.header.frame_id,
+                stamp,
+            )
+            point = do_transform_point(point, transform)
+        selected = {
+            "target_id": target.target_id,
+            "class_id": target.class_id,
+            "class_name": target.class_name,
+            "frame_id": self.cfg.arm_base_frame,
+            "xyz": vector([point.point.x, point.point.y, point.point.z], 3).tolist(),
+        }
+        return match_pinned_target(selected, self._targets(), self.cfg)
+
+    def _pick_goal(self, request):
+        try:
+            with self.lock:
+                if self.busy or self.shutdown_event.is_set():
+                    raise ValueError("busy or shutting down")
+                self.cfg.require_planning()
+                if self.cfg.mode != "execute":
+                    raise ValueError("PickTarget requires mode=execute")
+                feedback(self._state(), enabled=True)
+                self._pinned_target(request.target)
+                # Reserve before ACCEPT; services and a second action cannot race admission.
+                self.busy = True
+                self.plan = None
+                self.phase = "pick_accepted"
+                self.cancel_event.clear()
+                self.action_cancel_pending.clear()
+                self.action_done.clear()
+            return GoalResponse.ACCEPT
+        except Exception as exc:  # noqa: BLE001 - rejected goals never issue writes
+            self.get_logger().warning(f"PickTarget rejected: {exc}")
+            return GoalResponse.REJECT
+
+    def _pick_accepted(self, goal_handle):
+        with self.lock:
+            self.active_goal = goal_handle
+        goal_handle.execute()
+
+    def _pick_cancel(self, goal_handle):
+        with self.lock:
+            if self.active_goal is not goal_handle or not goal_handle.is_active:
+                return CancelResponse.REJECT
+            # Also latch intent: rclpy updates goal state only after this callback returns.
+            self.action_cancel_pending.set()
+            self.cancel_event.set()
+        return CancelResponse.ACCEPT
+
+    def _pick_execute(self, goal_handle):
+        result = PickTarget.Result()
+        result.grasp_verified = False
+        cancel = ActionCancellation(self.cancel_event, goal_handle)
+        stage = "TARGET_UNAVAILABLE"
+
+        def report(phase):
+            self._set_phase(phase)
+            if goal_handle.is_active:
+                goal_handle.publish_feedback(PickTarget.Feedback(phase=phase))
+
+        try:
+            if cancel.is_set():
+                raise ValueError("Canceled before planning")
+            target = self._pinned_target(goal_handle.request.target)
+            state = self._state()
+            stage = "PLANNING_FAILED"
+            report("planning")
+            plan = make_plan(target, state, self.cfg, time.monotonic())
+            if cancel.is_set():
+                raise ValueError("Canceled during planning")
+            self.plan_pub.publish(
+                String(data=json.dumps(asdict(plan), allow_nan=False))
+            )
+            stage = "TARGET_UNAVAILABLE"
+            current = self._pinned_target(goal_handle.request.target)
+            # A fresh direct HTTP read immediately precedes motion validation.
+            stage = "EXECUTION_FAILED"
+            validate_execution(
+                plan, [current], self.client.state(), self.cfg, time.monotonic()
+            )
+            run_plan(self.client, plan, self.cfg, cancel, report)
+            with self.lock:
+                if not cancel.is_set():
+                    goal_handle.succeed()
+                    result.success = True
+                    result.code = "SEQUENCE_COMPLETED"
+                    result.message = (
+                        "Commanded sequence finished; grasp success is not sensed"
+                    )
+                    return result
+            # Cancellation accepted at the completion boundary still requests a hold.
+            try:
+                self.client.request("/api/hold", {})
+            except Exception as exc:
+                raise HoldFailedError(
+                    f"Cancellation hold request failed: {exc}"
+                ) from exc
+            raise ValueError("Canceled at sequence completion")
+        except Exception as exc:  # noqa: BLE001 - action must always finish with a result
+            if self.action_cancel_pending.is_set():
+                # Let rclpy finish ACCEPT -> CANCELING before applying a terminal event.
+                deadline = time.monotonic() + 1.0
+                while (
+                    not goal_handle.is_cancel_requested and time.monotonic() < deadline
+                ):
+                    time.sleep(0.001)
+            result.success = False
+            hold_failed = isinstance(exc, HoldFailedError)
+            result.code = (
+                "HOLD_FAILED"
+                if hold_failed
+                else ("CANCELED" if cancel.is_set() else stage)
+            )
+            result.message = str(exc)
+            report(f"pick_stopped: {exc}")
+            if goal_handle.is_cancel_requested and not hold_failed:
+                goal_handle.canceled()
+            else:
+                goal_handle.abort()
+            return result
+        finally:
+            with self.lock:
+                self.active_goal = None
+                self.busy = False
+                self.action_done.set()
+
     def close(self):
         self.shutdown_event.set()
         self.cancel_event.set()
+        self.action_done.wait(timeout=5.0)
         if self.work_thread is not None:
             self.work_thread.join(timeout=5.0)
         self.poll_thread.join(timeout=2.0)
@@ -325,14 +516,17 @@ class Coordinator(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = None
+    executor = MultiThreadedExecutor(num_threads=4)
     try:
         node = Coordinator()
-        rclpy.spin(node)
+        executor.add_node(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
         if node is not None:
             node.close()
+            executor.shutdown()
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
