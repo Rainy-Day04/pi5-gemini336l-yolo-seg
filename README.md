@@ -66,6 +66,18 @@ cd pi5-gemini336l-yolo-seg
 ./scripts/run.sh perception ~/gemini336l_ws
 ```
 
+## 接入已有机械臂（标定参数可稍后填写）
+
+新增 `times_arm_perception` 原生 ROS 2 包，连接已经部署的 timesmanipulator HTTP
+服务，默认 `preview` 只读取状态。后续填参数即可切换 `plan` / `execute`；启动本身不会运动。
+
+```bash
+bash scripts/build_arm_adapter.sh ~/gemini336l_ws
+./scripts/run.sh arm ~/gemini336l_ws mode:=preview
+```
+
+独立配置文件、每端命令、标定参数和动作调用见 [机械臂接入说明](docs/arm-integration.md)。
+
 ## 与已有底盘 ROS 2 共存
 
 两个 workspace 不需要合并，也不要互相 `colcon build`。只要使用相同的 RMW 网络和 `ROS_DOMAIN_ID` 即可：

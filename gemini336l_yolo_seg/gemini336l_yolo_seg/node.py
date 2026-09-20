@@ -6,6 +6,7 @@ import queue
 import threading
 import time
 from collections import deque
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -385,7 +386,8 @@ class SegmentationNode(Node):
 
     def _make_3d_message(self, result: WorkResult) -> Object3DArray:
         message = Object3DArray()
-        message.header = result.item.color.header
+        # Changing the 3D frame must not relabel the original RGB/overlay header.
+        message.header = deepcopy(result.item.color.header)
         info = result.item.camera_info
         depth_message = result.item.depth
         depth_m: np.ndarray | None = None
@@ -503,7 +505,7 @@ class SegmentationNode(Node):
             transform = self._tf_buffer.lookup_transform(
                 target_frame,
                 source_frame,
-                Time(),
+                Time.from_msg(message.header.stamp),
                 timeout=Duration(
                     seconds=float(
                         self.get_parameter("tf_lookup_timeout_sec").value

@@ -10,8 +10,24 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: pip install 'numpy<2' pytest
-      - run: python -m compileall gemini336l_yolo_seg/gemini336l_yolo_seg
-      - run: pytest -q gemini336l_yolo_seg/test/test_geometry.py
+      - run: pip install 'numpy<2' pytest pyyaml
+      - run: python -m compileall gemini336l_yolo_seg/gemini336l_yolo_seg times_arm_perception
+      - run: pytest -q gemini336l_yolo_seg/test/test_geometry.py times_arm_perception/test/test_core.py
         env:
-          PYTHONPATH: gemini336l_yolo_seg
+          PYTHONPATH: gemini336l_yolo_seg:times_arm_perception
+  ros-arm:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and verify against a fake arm API
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          repo_dir="$PWD"
+          mkdir -p /tmp/arm_test_ws
+          cd /tmp/arm_test_ws
+          colcon build --base-paths "$repo_dir/gemini336l_msgs" "$repo_dir/times_arm_perception" --packages-up-to times_arm_perception
+          source install/setup.bash
+          export ROS_DOMAIN_ID=91 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+          python3 -m pytest -q "$repo_dir/times_arm_perception/test/test_core.py" "$repo_dir/times_arm_perception/test/test_ros_smoke.py"

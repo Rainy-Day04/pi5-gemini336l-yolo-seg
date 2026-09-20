@@ -62,8 +62,11 @@ case "${mode}" in
   perception)
     exec ros2 launch gemini336l_bringup perception.launch.py model:="${model_path}" "$@"
     ;;
+  arm)
+    exec ros2 launch times_arm_perception integration.launch.py "$@"
+    ;;
   *)
-    echo "Usage: $0 [all|camera|perception] [workspace] [launch arguments...]" >&2
+    echo "Usage: $0 [all|camera|perception|arm] [workspace] [launch arguments...]" >&2
     exit 2
     ;;
 esac

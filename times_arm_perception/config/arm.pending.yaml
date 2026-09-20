@@ -1,0 +1,51 @@
+arm_perception:
+  ros__parameters:
+    # The launch mode argument overrides this. Preview performs GET /api/state only.
+    mode: preview
+    base_url: http://127.0.0.1:18080
+    poll_hz: 5.0
+    http_timeout_sec: 0.5
+    objects_topic: /perception/gemini336l_yolo_seg/objects_3d
+    arm_base_frame: arm_base_link
+    robot_base_frame: base_link
+
+    # Leave false until camera D2C, camera mount AND arm mount are measured.
+    calibration_confirmed: false
+    # If a robot URDF already publishes this TF, keep publish_mount_tf=false.
+    publish_mount_tf: false
+    mount_xyz: [0.0, 0.0, 0.0]  # PLACEHOLDERS: arm origin relative to base_link, metres
+    mount_rpy: [0.0, 0.0, 0.0]  # PLACEHOLDERS: roll, pitch, yaw, radians
+
+    target_class: ""  # exact YOLO class label; empty selects nearest valid object
+    min_confidence: 0.5
+    target_max_age_sec: 1.0
+    plan_max_age_sec: 10.0
+    target_drift_m: 0.03
+    start_drift_deg: 3.0
+
+    # Provisional upstream kinematic dimensions; verify against your motor zeros/TCP.
+    kinematics_confirmed: false
+    joint_origins_xyz: [0.0, 0.0, 0.064, 0.0, 0.0, 0.0, 0.0, 0.190, 0.0, 0.0, 0.163, 0.0, 0.0, 0.0, 0.071]
+    joint_origins_rpy: [0.0, 0.0, 0.0, 1.5707963267948966, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.5707963267948966, 0.0, 0.0]
+    tool_offset_xyz: [0.0, -0.039, 0.111]
+    # model_angle = motor_angle * joint_sign + zero_offset; does NOT write motor zeros.
+    joint_signs: [1.0, 1.0, 1.0, 1.0, 1.0]
+    joint_zero_offsets_deg: [0.0, 0.0, 0.0, 0.0, 0.0]
+    joint_min_deg: [-80.0, -40.0, -55.0, -150.0, -90.0, 0.0]
+    joint_max_deg: [80.0, 40.0, 55.0, 150.0, 90.0, 38.0]
+    workspace_min: [-0.55, -0.55, 0.0]
+    workspace_max: [0.55, 0.55, 0.65]
+    grasp_offset_xyz: [0.0, 0.0, 0.0]  # object representative point -> tool target
+    approach_m: 0.07
+    lift_m: 0.10
+    gripper_open_deg: 30.0
+    gripper_close_deg: 0.0
+    ik_tolerance_m: 0.01
+    require_tool_down: true
+    tool_down_tolerance_deg: 15.0
+    velocity_rad_s: 0.1
+    control_period_sec: 0.1
+    settle_tolerance_deg: 2.0
+    tracking_tolerance_deg: 12.0
+    settle_timeout_sec: 8.0
+    gripper_settle_sec: 2.0
