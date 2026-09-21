@@ -67,3 +67,42 @@ def project_mask(
     x = (float(u) - cx) * z / fx
     y = (float(v) - cy) * z / fy
     return Projection(x=x, y=y, z=z, u=u, v=v, valid_pixels=count)
+
+
+def project_pixel(
+    depth_m: np.ndarray,
+    u: int,
+    v: int,
+    radius: int,
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+    min_depth_m: float,
+    max_depth_m: float,
+) -> Projection | None:
+    """Project one RGB pixel using robust median depth in its local window."""
+    if depth_m.ndim != 2:
+        raise ValueError("depth image must have one channel")
+    height, width = depth_m.shape
+    if not 0 <= u < width or not 0 <= v < height:
+        raise ValueError(f"pixel ({u}, {v}) is outside {width}x{height}")
+    if radius < 0:
+        raise ValueError("radius must not be negative")
+    if fx <= 0.0 or fy <= 0.0:
+        raise ValueError("camera focal lengths must be positive")
+
+    x1, x2 = max(0, u - radius), min(width, u + radius + 1)
+    y1, y2 = max(0, v - radius), min(height, v + radius + 1)
+    window = depth_m[y1:y2, x1:x2]
+    valid = np.isfinite(window)
+    valid &= window >= min_depth_m
+    valid &= window <= max_depth_m
+    count = int(np.count_nonzero(valid))
+    if count == 0:
+        return None
+
+    z = float(np.median(window[valid]))
+    x = (float(u) - cx) * z / fx
+    y = (float(v) - cy) * z / fy
+    return Projection(x=x, y=y, z=z, u=u, v=v, valid_pixels=count)

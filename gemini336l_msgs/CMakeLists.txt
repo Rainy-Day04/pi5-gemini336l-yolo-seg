@@ -17,6 +17,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TaskStatus.msg"
   "srv/SelectTarget.srv"
   "srv/StartTask.srv"
+  "srv/QueryPixel3D.srv"
   "action/NavigateToTarget.action"
   "action/PickTarget.action"
   DEPENDENCIES geometry_msgs std_msgs builtin_interfaces action_msgs

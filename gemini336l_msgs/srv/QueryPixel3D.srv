@@ -1,0 +1,14 @@
+# Pixel in the RGB image. Set image_stamp to zero to query the latest RGB frame.
+builtin_interfaces/Time image_stamp
+uint32 pixel_u
+uint32 pixel_v
+# Median depth window radius: 0 uses exactly one pixel, 2 uses a 5x5 window.
+uint32 window_radius
+---
+bool valid
+string message
+# Point is returned in navigation_frame when image-time TF is available;
+# otherwise it remains in camera_info.header.frame_id. Always inspect frame_id.
+geometry_msgs/PointStamped point
+float32 depth_m
+uint32 valid_depth_pixels

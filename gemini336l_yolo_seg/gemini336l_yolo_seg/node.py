@@ -24,8 +24,14 @@ from tf2_geometry_msgs import do_transform_point
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from gemini336l_msgs.msg import Object2D, Object2DArray, Object3D, Object3DArray
+from gemini336l_msgs.srv import QueryPixel3D
 
-from .geometry import depth_to_meters, format_position_label, project_mask
+from .geometry import (
+    depth_to_meters,
+    format_position_label,
+    project_mask,
+    project_pixel,
+)
 
 
 @dataclass(frozen=True)
@@ -78,7 +84,9 @@ class SegmentationNode(Node):
         self._lock = threading.Lock()
         self._latest_color: Image | None = None
         self._latest_info: CameraInfo | None = None
-        self._depth_frames: deque[Image] = deque(maxlen=12)
+        # Keep enough aligned depth history for a human clicking a recently
+        # displayed network frame (about 1.5 s at 30 FPS).
+        self._depth_frames: deque[Image] = deque(maxlen=45)
         self._last_enqueued_stamp = -1
         self._last_warning_time = 0.0
         self._last_status_time = 0.0
@@ -128,6 +136,7 @@ class SegmentationNode(Node):
             "show_distance_on_overlay": True,
             "navigation_frame": "base_link",
             "tf_lookup_timeout_sec": 0.02,
+            "pixel_query_max_age_sec": 1.5,
         }
         for name, default in parameters.items():
             self.declare_parameter(name, default)
@@ -172,6 +181,7 @@ class SegmentationNode(Node):
         self._objects_3d_pub = self.create_publisher(
             Object3DArray, str(self.get_parameter("objects_3d_topic").value), 10
         )
+        self.create_service(QueryPixel3D, "~/query_pixel_3d", self._query_pixel_3d)
 
     def _on_color(self, message: Image) -> None:
         with self._lock:
@@ -195,6 +205,100 @@ class SegmentationNode(Node):
         if abs(_stamp_ns(nearest) - stamp_ns) > int(max_delta * 1e9):
             return None
         return nearest
+
+    def _query_pixel_3d(self, request, response):
+        """Return XYZ for a displayed RGB pixel using aligned depth."""
+        try:
+            if not bool(self.get_parameter("depth_aligned_to_color").value):
+                raise ValueError("depth_aligned_to_color is false")
+            radius = int(request.window_radius)
+            if radius > 20:
+                raise ValueError("window_radius must be between 0 and 20")
+
+            requested_ns = int(request.image_stamp.sec) * 1_000_000_000 + int(
+                request.image_stamp.nanosec
+            )
+            with self._lock:
+                color = self._latest_color
+                info = deepcopy(self._latest_info)
+                if requested_ns == 0:
+                    if color is None:
+                        raise ValueError("no RGB frame received yet")
+                    stamp = deepcopy(color.header.stamp)
+                    requested_ns = _stamp_ns(color)
+                else:
+                    stamp = deepcopy(request.image_stamp)
+                depth_message = self._nearest_depth(requested_ns)
+
+            if info is None:
+                raise ValueError("no color camera_info received yet")
+            if depth_message is None:
+                raise ValueError(
+                    "no aligned depth frame near the requested image stamp"
+                )
+            age = (self.get_clock().now().nanoseconds - requested_ns) / 1e9
+            max_age = float(self.get_parameter("pixel_query_max_age_sec").value)
+            if age < -0.1 or age > max_age:
+                raise ValueError(f"requested image is stale ({age:.2f} s)")
+
+            raw_depth = self._bridge.imgmsg_to_cv2(
+                depth_message, desired_encoding="passthrough"
+            )
+            depth_m = depth_to_meters(raw_depth, depth_message.encoding)
+            if depth_m.shape != (int(info.height), int(info.width)):
+                raise ValueError("aligned depth and color camera_info sizes differ")
+            projection = project_pixel(
+                depth_m,
+                int(request.pixel_u),
+                int(request.pixel_v),
+                radius,
+                float(info.k[0]),
+                float(info.k[4]),
+                float(info.k[2]),
+                float(info.k[5]),
+                float(self.get_parameter("min_depth_m").value),
+                float(self.get_parameter("max_depth_m").value),
+            )
+            if projection is None:
+                raise ValueError("no valid depth in the selected pixel window")
+
+            point = PointStamped()
+            point.header.stamp = stamp
+            point.header.frame_id = info.header.frame_id
+            point.point.x = projection.x
+            point.point.y = projection.y
+            point.point.z = projection.z
+            target_frame = str(self.get_parameter("navigation_frame").value).strip()
+            message = "OK"
+            if target_frame and target_frame != point.header.frame_id:
+                try:
+                    transform = self._tf_buffer.lookup_transform(
+                        target_frame,
+                        point.header.frame_id,
+                        Time.from_msg(stamp),
+                        timeout=Duration(
+                            seconds=float(
+                                self.get_parameter("tf_lookup_timeout_sec").value
+                            )
+                        ),
+                    )
+                    point = do_transform_point(point, transform)
+                    point.header.stamp = stamp
+                    point.header.frame_id = target_frame
+                except TransformException as exc:
+                    message = (
+                        f"OK in camera frame; TF to {target_frame} unavailable: {exc}"
+                    )
+
+            response.valid = True
+            response.message = message
+            response.point = point
+            response.depth_m = projection.z
+            response.valid_depth_pixels = projection.valid_pixels
+        except Exception as exc:  # noqa: BLE001 - service returns input/runtime errors
+            response.valid = False
+            response.message = str(exc)
+        return response
 
     def _on_timer(self) -> None:
         self._publish_available_result()

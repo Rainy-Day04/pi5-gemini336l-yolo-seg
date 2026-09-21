@@ -131,6 +131,47 @@ export ROS_DOMAIN_ID=23
 `vision` 与原来的 `all` 都只启动相机和 YOLO，不启动导航、任务协调器或机械臂。
 每个检测框都会有第二行坐标；深度、内参或对齐不满足时显示红色 `xyz unavailable`，并在 `objects_3d` 中保持 `position_valid=false`。
 
+### 点击任意像素查询 XYZ
+
+感知节点提供 `/perception/gemini336l_yolo_seg/query_pixel_3d`。MiniPC 上运行可点击查看器：
+
+```bash
+ros2 run gemini336l_yolo_seg pixel_picker
+```
+
+MiniPC 第一次使用需要克隆同一仓库并只编译接口和查看器（不安装模型）：
+
+```bash
+mkdir -p ~/pixel_view_ws/src
+cd ~/pixel_view_ws/src
+git clone https://github.com/Rainy-Day04/pi5-gemini336l-yolo-seg.git
+source /opt/ros/jazzy/setup.bash
+cd ~/pixel_view_ws
+rosdep install --from-paths \
+  src/pi5-gemini336l-yolo-seg/gemini336l_msgs \
+  src/pi5-gemini336l-yolo-seg/gemini336l_yolo_seg \
+  --ignore-src -r -y --rosdistro jazzy
+colcon build --symlink-install \
+  --base-paths \
+    src/pi5-gemini336l-yolo-seg/gemini336l_msgs \
+    src/pi5-gemini336l-yolo-seg/gemini336l_yolo_seg \
+  --packages-up-to gemini336l_yolo_seg
+source ~/pixel_view_ws/install/setup.bash
+```
+
+鼠标左键点击任意像素后，窗口冻结点击的那一帧并显示查询结果；按空格恢复实时画面，按 `Q` 或 `Esc` 退出。默认用点击点附近 `5x5` 像素的有效深度中值，但 XYZ 仍沿点击像素对应的相机射线计算。结果优先转换到 `base_link`；窗口和终端都会显示实际 `frame_id`。
+
+没有图形界面时，也可以直接查询最新 RGB 帧的像素 `(320, 240)`：
+
+```bash
+ros2 service call \
+  /perception/gemini336l_yolo_seg/query_pixel_3d \
+  gemini336l_msgs/srv/QueryPixel3D \
+  '{image_stamp: {sec: 0, nanosec: 0}, pixel_u: 320, pixel_v: 240, window_radius: 2}'
+```
+
+透明、反光、过近/过远或没有有效深度的区域会返回 `valid: false`，不会伪造 XYZ。
+
 单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
 
 ```bash
