@@ -46,6 +46,11 @@ def generate_launch_description():
                 default_value="5.0",
                 description="YOLO segmentation rate; camera/depth topics remain independent.",
             ),
+            DeclareLaunchArgument(
+                "overlay_jpeg_quality",
+                default_value="70",
+                description="JPEG quality for the optional compressed overlay stream.",
+            ),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -67,6 +72,9 @@ def generate_launch_description():
                         "navigation_frame": LaunchConfiguration("navigation_frame"),
                         "inference_hz": ParameterValue(
                             LaunchConfiguration("inference_hz"), value_type=float
+                        ),
+                        "overlay_jpeg_quality": ParameterValue(
+                            LaunchConfiguration("overlay_jpeg_quality"), value_type=int
                         ),
                     },
                 ],

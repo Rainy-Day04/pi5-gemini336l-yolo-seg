@@ -6,6 +6,9 @@ gemini336l_yolo_seg:
     mask_topic: ~/mask
     detections_topic: ~/detections_2d
     overlay_topic: ~/overlay
+    overlay_compressed_topic: ~/overlay/compressed
+    # Cross-machine viewer stream. Encoding only runs while it has subscribers.
+    overlay_jpeg_quality: 70
     objects_3d_topic: ~/objects_3d
 
     # Pi 5 starting point: raise to 384 only after checking temperature and FPS.

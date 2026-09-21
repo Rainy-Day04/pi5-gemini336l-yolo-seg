@@ -102,6 +102,7 @@ export ROS_DOMAIN_ID=23
 | Topic | Type | 说明 |
 |---|---|---|
 | `/camera/color/image_raw` | `sensor_msgs/Image` | 640x480 RGB，30 Hz |
+| `/camera/color/image_raw/compressed` | `sensor_msgs/CompressedImage` | 跨机器查看用 JPEG，不影响本机原图推理 |
 | `/camera/depth/image_raw` | `sensor_msgs/Image` | 对齐到 color 的深度 |
 | `/camera/color/camera_info` | `sensor_msgs/CameraInfo` | 用于 3D 反投影的 color 内参 |
 | `/camera/depth/points` | `sensor_msgs/PointCloud2` | Orbbec 独立生成，不经过 YOLO |
@@ -113,6 +114,7 @@ export ROS_DOMAIN_ID=23
 | `/perception/gemini336l_yolo_seg/mask` | `sensor_msgs/Image` (`mono16`) | 0 为背景，1..N 为 `instance_id` |
 | `/perception/gemini336l_yolo_seg/detections_2d` | `gemini336l_msgs/Object2DArray` | 类别、置信度、bbox、mask 面积 |
 | `/perception/gemini336l_yolo_seg/overlay` | `sensor_msgs/Image` (`bgr8`) | 彩色 mask、bbox 与对齐深度距离 |
+| `/perception/gemini336l_yolo_seg/overlay/compressed` | `sensor_msgs/CompressedImage` | 跨机器查看用 JPEG overlay；有订阅者时才编码 |
 | `/perception/gemini336l_yolo_seg/objects_3d` | `gemini336l_msgs/Object3DArray` | mask 内有效深度中值反投影的 XYZ |
 
 `objects_3d.header.frame_id` 使用 color `CameraInfo` 的 optical frame；ROS 相机坐标约定为 X 向右、Y 向下、Z 向前。每个 3D 对象都有 `position_valid`，无匹配深度时仍保留分类结果但置为 false。
@@ -131,12 +133,52 @@ export ROS_DOMAIN_ID=23
 `vision` 与原来的 `all` 都只启动相机和 YOLO，不启动导航、任务协调器或机械臂。
 每个检测框都会有第二行坐标；深度、内参或对齐不满足时显示红色 `xyz unavailable`，并在 `objects_3d` 中保持 `position_valid=false`。
 
+### 50 Mbps 网络推荐配置
+
+Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅 JPEG。推荐 RGB/depth 15 FPS、segmentation 5 FPS：
+
+```bash
+./scripts/run.sh vision ~/gemini336l_ws \
+  camera_fps:=15 inference_hz:=5.0 \
+  depth_registration:=true align_mode:=HW \
+  enable_frame_sync:=false enable_point_cloud:=false \
+  overlay_jpeg_quality:=70
+```
+
+MiniPC 查看 15 FPS 压缩原图：
+
+```bash
+ros2 run image_view image_view --ros-args \
+  -r __node:=compressed_camera_view \
+  -r image:=/camera/color/image_raw \
+  -p image_transport:=compressed
+```
+
+MiniPC 查看 5 FPS 压缩 segmentation、目标框和 XYZ：
+
+```bash
+ros2 run image_view image_view --ros-args \
+  -r __node:=compressed_yolo_view \
+  -r image:=/perception/gemini336l_yolo_seg/overlay \
+  -p image_transport:=compressed
+```
+
+不要在 MiniPC 订阅两个未压缩的 `Image` topic；它们在 640x480、15+5 FPS 时理论有效载荷仍约 147 Mbps。压缩查看不会改变本机 YOLO、深度匹配或 XYZ 精度。
+
 ### 点击任意像素查询 XYZ
 
 感知节点提供 `/perception/gemini336l_yolo_seg/query_pixel_3d`。MiniPC 上运行可点击查看器：
 
 ```bash
 ros2 run gemini336l_yolo_seg pixel_picker
+```
+
+点选器默认订阅压缩 overlay。若要在 15 FPS 压缩原图上点选，使用：
+
+```bash
+ros2 run gemini336l_yolo_seg pixel_picker --ros-args \
+  -p image_topic:=/camera/color/image_raw/compressed \
+  -p compressed:=true
 ```
 
 MiniPC 第一次使用需要克隆同一仓库并只编译接口和查看器（不安装模型）：

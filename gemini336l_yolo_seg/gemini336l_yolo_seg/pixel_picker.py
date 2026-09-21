@@ -6,12 +6,13 @@ import threading
 from copy import deepcopy
 
 import cv2
+import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage, Image
 
 from gemini336l_msgs.srv import QueryPixel3D
 
@@ -21,9 +22,10 @@ class PixelPicker(Node):
         super().__init__("pixel_xyz_picker")
         self.image_topic = str(
             self.declare_parameter(
-                "image_topic", "/perception/gemini336l_yolo_seg/overlay"
+                "image_topic", "/perception/gemini336l_yolo_seg/overlay/compressed"
             ).value
         )
+        self.compressed = bool(self.declare_parameter("compressed", True).value)
         self.service_name = str(
             self.declare_parameter(
                 "service", "/perception/gemini336l_yolo_seg/query_pixel_3d"
@@ -42,8 +44,9 @@ class PixelPicker(Node):
         self.pending = None
         self.window = "Pixel XYZ: click=query, SPACE=live, Q=quit"
         self.client = self.create_client(QueryPixel3D, self.service_name)
+        message_type = CompressedImage if self.compressed else Image
         self.create_subscription(
-            Image, self.image_topic, self._image, qos_profile_sensor_data
+            message_type, self.image_topic, self._image, qos_profile_sensor_data
         )
         cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window, self._mouse)
@@ -53,8 +56,15 @@ class PixelPicker(Node):
             f"{2 * self.radius + 1}x{2 * self.radius + 1} median depth"
         )
 
-    def _image(self, message: Image) -> None:
-        image = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+    def _image(self, message: Image | CompressedImage) -> None:
+        if self.compressed:
+            encoded = np.frombuffer(message.data, np.uint8)
+            image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+            if image is None:
+                self.get_logger().warning("Could not decode compressed image")
+                return
+        else:
+            image = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
         with self.lock:
             self.latest_image = image.copy()
             self.latest_header = deepcopy(message.header)

@@ -19,6 +19,7 @@ def generate_launch_description():
     align_mode = LaunchConfiguration("align_mode")
     camera_fps = LaunchConfiguration("camera_fps")
     inference_hz = LaunchConfiguration("inference_hz")
+    overlay_jpeg_quality = LaunchConfiguration("overlay_jpeg_quality")
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -37,6 +38,11 @@ def generate_launch_description():
                 "inference_hz",
                 default_value="5.0",
                 description="Independent YOLO segmentation rate.",
+            ),
+            DeclareLaunchArgument(
+                "overlay_jpeg_quality",
+                default_value="70",
+                description="JPEG quality for the optional compressed overlay stream.",
             ),
             DeclareLaunchArgument("align_mode", default_value="SW"),
             DeclareLaunchArgument("enable_frame_sync", default_value="false"),
@@ -70,6 +76,7 @@ def generate_launch_description():
                     "model": model,
                     "depth_aligned_to_color": LaunchConfiguration("depth_registration"),
                     "inference_hz": inference_hz,
+                    "overlay_jpeg_quality": overlay_jpeg_quality,
                 }.items(),
             ),
         ]

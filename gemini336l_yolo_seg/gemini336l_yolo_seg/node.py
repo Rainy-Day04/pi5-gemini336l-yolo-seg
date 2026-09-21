@@ -19,7 +19,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 from tf2_geometry_msgs import do_transform_point
 from tf2_ros import Buffer, TransformException, TransformListener
 
@@ -120,6 +120,8 @@ class SegmentationNode(Node):
             "mask_topic": "~/mask",
             "detections_topic": "~/detections_2d",
             "overlay_topic": "~/overlay",
+            "overlay_compressed_topic": "~/overlay/compressed",
+            "overlay_jpeg_quality": 70,
             "objects_3d_topic": "~/objects_3d",
             "inference_hz": 5.0,
             "imgsz": 320,
@@ -173,6 +175,11 @@ class SegmentationNode(Node):
         self._overlay_pub = self.create_publisher(
             Image,
             str(self.get_parameter("overlay_topic").value),
+            qos_profile_sensor_data,
+        )
+        self._overlay_compressed_pub = self.create_publisher(
+            CompressedImage,
+            str(self.get_parameter("overlay_compressed_topic").value),
             qos_profile_sensor_data,
         )
         self._detections_pub = self.create_publisher(
@@ -461,6 +468,23 @@ class SegmentationNode(Node):
         overlay_message.header = result.item.color.header
         self._mask_pub.publish(mask_message)
         self._overlay_pub.publish(overlay_message)
+        # JPEG encoding is deliberately subscriber-driven.  The Pi pays no
+        # encoding cost unless a remote viewer actually uses this topic.
+        if self._overlay_compressed_pub.get_subscription_count() > 0:
+            quality = max(
+                1, min(100, int(self.get_parameter("overlay_jpeg_quality").value))
+            )
+            ok, encoded = cv2.imencode(
+                ".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, quality]
+            )
+            if ok:
+                compressed = CompressedImage()
+                compressed.header = result.item.color.header
+                compressed.format = "jpeg"
+                compressed.data = encoded.tobytes()
+                self._overlay_compressed_pub.publish(compressed)
+            else:
+                self.get_logger().warning("Failed to JPEG-encode overlay")
         self._detections_pub.publish(self._make_2d_message(result))
         self._objects_3d_pub.publish(objects_3d_message)
 
