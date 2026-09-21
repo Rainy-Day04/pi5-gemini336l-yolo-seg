@@ -129,6 +129,7 @@ export ROS_DOMAIN_ID=23
 
 `/camera/color/image_raw` 是高帧率原图，`/perception/gemini336l_yolo_seg/overlay` 是带 mask、类别和 XYZ 的低频推理结果。不要把旧 mask 重画到后续原图来伪造高帧率检测结果。
 `vision` 与原来的 `all` 都只启动相机和 YOLO，不启动导航、任务协调器或机械臂。
+每个检测框都会有第二行坐标；深度、内参或对齐不满足时显示红色 `xyz unavailable`，并在 `objects_3d` 中保持 `position_valid=false`。
 
 单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
 

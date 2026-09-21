@@ -452,18 +452,27 @@ class SegmentationNode(Node):
     ) -> None:
         height, width = overlay.shape[:2]
         for detection, obj in zip(detections, objects_3d.objects, strict=False):
-            if not obj.position_valid:
-                continue
-            navigation_frame = str(self.get_parameter("navigation_frame").value).strip()
-            text = format_position_label(
-                obj.position.x,
-                obj.position.y,
-                obj.position.z,
-                objects_3d.header.frame_id,
-                navigation_frame,
-            )
+            if obj.position_valid:
+                navigation_frame = str(
+                    self.get_parameter("navigation_frame").value
+                ).strip()
+                text = format_position_label(
+                    obj.position.x,
+                    obj.position.y,
+                    obj.position.z,
+                    objects_3d.header.frame_id,
+                    navigation_frame,
+                )
+            else:
+                # Keep the missing-coordinate state visible on the same target.
+                # The structured Object3D message still carries position_valid=false.
+                text = "xyz unavailable"
             x1, y1, _, _ = detection.box
-            color = SegmentationNode._color_for_class(detection.class_id)
+            color = (
+                SegmentationNode._color_for_class(detection.class_id)
+                if obj.position_valid
+                else (0, 0, 255)
+            )
             (text_width, text_height), baseline = cv2.getTextSize(
                 text, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1
             )
