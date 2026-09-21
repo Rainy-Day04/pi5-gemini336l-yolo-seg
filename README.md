@@ -153,7 +153,7 @@ MiniPC 只运行一个合成查看器；它同时显示画面、mask、目标框
 ros2 run gemini336l_yolo_seg pixel_picker
 ```
 
-合成流缩至 480x360 后再以 JPEG 质量 40 编码。点选器根据 `CameraInfo` 把显示坐标映射回 640x480 传感器坐标，因此降采样不会破坏 XYZ 查询。mask、未压缩 overlay、JPEG 和 2D/3D 消息都按订阅者惰性生成；没有任何检测输出订阅者时 YOLO 自动暂停，但相机与 `query_pixel_3d` 服务仍可用。不要同时打开原图和 overlay 查看器。
+合成流缩至 480x360 后再以 JPEG 质量 40 编码。点选器根据 `CameraInfo` 把显示坐标映射回 640x480 传感器坐标，因此降采样不会破坏 XYZ 查询。mask 在原图坐标生成，避免 320x320 letterbox 直接拉伸导致人物与 mask 错位。mask、未压缩 overlay、JPEG 和 2D/3D 消息都按订阅者惰性生成；没有任何检测输出订阅者时 YOLO 自动暂停，但相机与 `query_pixel_3d` 服务仍可用。不要同时打开原图和 overlay 查看器。
 
 ### 点击任意像素查询 XYZ
 

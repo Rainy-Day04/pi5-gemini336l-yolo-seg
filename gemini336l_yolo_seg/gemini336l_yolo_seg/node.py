@@ -143,7 +143,9 @@ class SegmentationNode(Node):
             "confidence_threshold": 0.35,
             "iou_threshold": 0.45,
             "max_detections": 15,
-            "retina_masks": False,
+            # Keep masks in original-image coordinates.  Resizing letterboxed
+            # low-resolution masks directly causes visible person/mask offsets.
+            "retina_masks": True,
             "classes": "",
             "max_depth_time_delta_sec": 0.20,
             "min_depth_m": 0.15,

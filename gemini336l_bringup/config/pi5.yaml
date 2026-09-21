@@ -26,8 +26,8 @@ gemini336l_yolo_seg:
     confidence_threshold: 0.35
     iou_threshold: 0.45
     max_detections: 15
-    # Lower-resolution mask post-processing; masks are resized only where needed.
-    retina_masks: false
+    # Required for pixel-accurate masks on 640x480 letterboxed model input.
+    retina_masks: true
     # COCO class IDs, comma-separated. Empty means all classes.
     classes: ""
 
