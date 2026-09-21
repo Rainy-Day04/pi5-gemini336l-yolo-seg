@@ -144,7 +144,8 @@ Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合�
   enable_frame_sync:=false enable_point_cloud:=false \
   enable_colored_point_cloud:=false \
   overlay_jpeg_quality:=40 overlay_max_width:=480 \
-  preview_hz:=0.0
+  preview_hz:=0.0 retina_masks:=true \
+  max_detections:=15 run_inference_when_unsubscribed:=false
 ```
 
 MiniPC 只运行一个合成查看器；它同时显示画面、mask、目标框与 XYZ，并支持点击任意像素查询 XYZ：

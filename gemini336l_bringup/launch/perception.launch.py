@@ -56,6 +56,11 @@ def generate_launch_description():
             DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
             DeclareLaunchArgument("preview_max_width", default_value="480"),
             DeclareLaunchArgument("preview_max_seg_age_sec", default_value="0.5"),
+            DeclareLaunchArgument("retina_masks", default_value="true"),
+            DeclareLaunchArgument("max_detections", default_value="15"),
+            DeclareLaunchArgument(
+                "run_inference_when_unsubscribed", default_value="false"
+            ),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -96,6 +101,16 @@ def generate_launch_description():
                         "preview_max_seg_age_sec": ParameterValue(
                             LaunchConfiguration("preview_max_seg_age_sec"),
                             value_type=float,
+                        ),
+                        "retina_masks": ParameterValue(
+                            LaunchConfiguration("retina_masks"), value_type=bool
+                        ),
+                        "max_detections": ParameterValue(
+                            LaunchConfiguration("max_detections"), value_type=int
+                        ),
+                        "run_inference_when_unsubscribed": ParameterValue(
+                            LaunchConfiguration("run_inference_when_unsubscribed"),
+                            value_type=bool,
                         ),
                     },
                 ],

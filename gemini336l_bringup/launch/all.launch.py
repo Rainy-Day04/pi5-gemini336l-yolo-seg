@@ -25,6 +25,11 @@ def generate_launch_description():
     preview_jpeg_quality = LaunchConfiguration("preview_jpeg_quality")
     preview_max_width = LaunchConfiguration("preview_max_width")
     preview_max_seg_age_sec = LaunchConfiguration("preview_max_seg_age_sec")
+    retina_masks = LaunchConfiguration("retina_masks")
+    max_detections = LaunchConfiguration("max_detections")
+    run_inference_when_unsubscribed = LaunchConfiguration(
+        "run_inference_when_unsubscribed"
+    )
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -54,6 +59,11 @@ def generate_launch_description():
             DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
             DeclareLaunchArgument("preview_max_width", default_value="480"),
             DeclareLaunchArgument("preview_max_seg_age_sec", default_value="0.5"),
+            DeclareLaunchArgument("retina_masks", default_value="true"),
+            DeclareLaunchArgument("max_detections", default_value="15"),
+            DeclareLaunchArgument(
+                "run_inference_when_unsubscribed", default_value="false"
+            ),
             DeclareLaunchArgument("align_mode", default_value="SW"),
             DeclareLaunchArgument("enable_frame_sync", default_value="false"),
             DeclareLaunchArgument("enable_ir_auto_exposure", default_value="false"),
@@ -92,6 +102,11 @@ def generate_launch_description():
                     "preview_jpeg_quality": preview_jpeg_quality,
                     "preview_max_width": preview_max_width,
                     "preview_max_seg_age_sec": preview_max_seg_age_sec,
+                    "retina_masks": retina_masks,
+                    "max_detections": max_detections,
+                    "run_inference_when_unsubscribed": (
+                        run_inference_when_unsubscribed
+                    ),
                 }.items(),
             ),
         ]
