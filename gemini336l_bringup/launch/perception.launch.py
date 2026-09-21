@@ -41,6 +41,11 @@ def generate_launch_description():
                 description="Set true only when the Orbbec driver aligns depth to color.",
             ),
             DeclareLaunchArgument("navigation_frame", default_value="base_link"),
+            DeclareLaunchArgument(
+                "inference_hz",
+                default_value="5.0",
+                description="YOLO segmentation rate; camera/depth topics remain independent.",
+            ),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -59,8 +64,9 @@ def generate_launch_description():
                             LaunchConfiguration("depth_aligned_to_color"),
                             value_type=bool,
                         ),
-                        "navigation_frame": LaunchConfiguration(
-                            "navigation_frame"
+                        "navigation_frame": LaunchConfiguration("navigation_frame"),
+                        "inference_hz": ParameterValue(
+                            LaunchConfiguration("inference_hz"), value_type=float
                         ),
                     },
                 ],

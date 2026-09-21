@@ -5,6 +5,18 @@ from dataclasses import dataclass
 import numpy as np
 
 
+def format_position_label(
+    x: float,
+    y: float,
+    z: float,
+    frame_id: str,
+    navigation_frame: str,
+) -> str:
+    """Format coordinates while making their coordinate frame unambiguous."""
+    prefix = "base" if navigation_frame and frame_id == navigation_frame else "cam"
+    return f"{prefix} x {x:.2f}  y {y:.2f}  z {z:.2f} m"
+
+
 @dataclass(frozen=True)
 class Projection:
     x: float

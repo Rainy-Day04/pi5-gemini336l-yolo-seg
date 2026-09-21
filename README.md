@@ -117,7 +117,18 @@ export ROS_DOMAIN_ID=23
 
 `objects_3d.header.frame_id` 使用 color `CameraInfo` 的 optical frame；ROS 相机坐标约定为 X 向右、Y 向下、Z 向前。每个 3D 对象都有 `position_valid`，无匹配深度时仍保留分类结果但置为 false。
 
-距离取每个实例 mask 内有效对齐深度的中位数。节点通过 TF 把相机坐标转换到 `base_link` 后，overlay 显示 `x 1.20 y -0.30 d 1.24 m`：x 为前后、y 为左右、d 为地面平面距离。`objects_3d.position` 同样位于其 header 指明的导航坐标系中。
+距离取每个实例 mask 内有效对齐深度的中位数。节点通过 TF 把相机坐标转换到 `base_link` 后，每个目标的 overlay 显示 `base x 1.20 y -0.30 z 0.42 m`：x 向前、y 向左、z 向上。`objects_3d.position` 同样位于其 header 指明的坐标系中；TF 暂时不可用时标签使用 `cam` 前缀，XYZ 位于相机光学坐标系。
+
+相机原始图传和 YOLO 分割使用独立频率。下面让 RGB/depth 按 30 FPS 发布，YOLO/overlay 按 5 FPS 运行：
+
+```bash
+./scripts/run.sh vision ~/gemini336l_ws \
+  camera_fps:=30 inference_hz:=5.0 \
+  enable_point_cloud:=false align_mode:=HW
+```
+
+`/camera/color/image_raw` 是高帧率原图，`/perception/gemini336l_yolo_seg/overlay` 是带 mask、类别和 XYZ 的低频推理结果。不要把旧 mask 重画到后续原图来伪造高帧率检测结果。
+`vision` 与原来的 `all` 都只启动相机和 YOLO，不启动导航、任务协调器或机械臂。
 
 单独启动感知节点时必须明确声明相机已经开启 D2C，否则节点会安全地禁用距离，避免把未对齐深度误当成目标距离：
 

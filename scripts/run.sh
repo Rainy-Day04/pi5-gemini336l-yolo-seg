@@ -64,7 +64,7 @@ model_path="${GEMINI336L_MODEL:-${repo_dir}/models/yolo26n-seg_ncnn_model}"
 export GEMINI336L_MODEL="${model_path}"
 
 case "${mode}" in
-  all)
+  all|vision)
     exec ros2 launch gemini336l_bringup all.launch.py model:="${model_path}" "$@"
     ;;
   camera)
@@ -74,7 +74,7 @@ case "${mode}" in
     exec ros2 launch gemini336l_bringup perception.launch.py model:="${model_path}" "$@"
     ;;
   *)
-    echo "Usage: $0 [all|camera|perception|arm|task] [workspace] [launch arguments...]" >&2
+    echo "Usage: $0 [vision|all|camera|perception|arm|task] [workspace] [launch arguments...]" >&2
     exit 2
     ;;
 esac

@@ -25,7 +25,7 @@ from tf2_ros import Buffer, TransformException, TransformListener
 
 from gemini336l_msgs.msg import Object2D, Object2DArray, Object3D, Object3DArray
 
-from .geometry import depth_to_meters, project_mask
+from .geometry import depth_to_meters, format_position_label, project_mask
 
 
 @dataclass(frozen=True)
@@ -349,9 +349,7 @@ class SegmentationNode(Node):
         objects_3d_message = self._make_3d_message(result)
         overlay = result.overlay.copy()
         if bool(self.get_parameter("show_distance_on_overlay").value):
-            self._draw_distance_labels(
-                overlay, result.detections, objects_3d_message
-            )
+            self._draw_distance_labels(overlay, result.detections, objects_3d_message)
 
         mask_message = self._bridge.cv2_to_imgmsg(result.label_mask, encoding="mono16")
         mask_message.header = result.item.color.header
@@ -456,17 +454,14 @@ class SegmentationNode(Node):
         for detection, obj in zip(detections, objects_3d.objects, strict=False):
             if not obj.position_valid:
                 continue
-            navigation_frame = str(
-                self.get_parameter("navigation_frame").value
-            ).strip()
-            if navigation_frame and objects_3d.header.frame_id == navigation_frame:
-                planar_distance = float(np.hypot(obj.position.x, obj.position.y))
-                text = (
-                    f"x {obj.position.x:.2f}  y {obj.position.y:.2f}  "
-                    f"d {planar_distance:.2f} m"
-                )
-            else:
-                text = f"depth {obj.depth_m:.2f} m"
+            navigation_frame = str(self.get_parameter("navigation_frame").value).strip()
+            text = format_position_label(
+                obj.position.x,
+                obj.position.y,
+                obj.position.z,
+                objects_3d.header.frame_id,
+                navigation_frame,
+            )
             x1, y1, _, _ = detection.box
             color = SegmentationNode._color_for_class(detection.class_id)
             (text_width, text_height), baseline = cv2.getTextSize(
@@ -492,9 +487,7 @@ class SegmentationNode(Node):
                 cv2.LINE_AA,
             )
 
-    def _transform_objects_to_navigation_frame(
-        self, message: Object3DArray
-    ) -> None:
+    def _transform_objects_to_navigation_frame(self, message: Object3DArray) -> None:
         target_frame = str(self.get_parameter("navigation_frame").value).strip()
         source_frame = message.header.frame_id
         if not target_frame or not source_frame or target_frame == source_frame:
@@ -507,9 +500,7 @@ class SegmentationNode(Node):
                 source_frame,
                 Time.from_msg(message.header.stamp),
                 timeout=Duration(
-                    seconds=float(
-                        self.get_parameter("tf_lookup_timeout_sec").value
-                    )
+                    seconds=float(self.get_parameter("tf_lookup_timeout_sec").value)
                 ),
             )
         except TransformException as exc:

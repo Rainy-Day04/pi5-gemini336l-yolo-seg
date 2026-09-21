@@ -17,6 +17,8 @@ def generate_launch_description():
     )
     model = LaunchConfiguration("model")
     align_mode = LaunchConfiguration("align_mode")
+    camera_fps = LaunchConfiguration("camera_fps")
+    inference_hz = LaunchConfiguration("inference_hz")
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -26,6 +28,16 @@ def generate_launch_description():
                 ),
             ),
             DeclareLaunchArgument("depth_registration", default_value="true"),
+            DeclareLaunchArgument(
+                "camera_fps",
+                default_value="30",
+                description="Raw RGB and depth stream rate.",
+            ),
+            DeclareLaunchArgument(
+                "inference_hz",
+                default_value="5.0",
+                description="Independent YOLO segmentation rate.",
+            ),
             DeclareLaunchArgument("align_mode", default_value="SW"),
             DeclareLaunchArgument("enable_frame_sync", default_value="false"),
             DeclareLaunchArgument("enable_ir_auto_exposure", default_value="false"),
@@ -37,6 +49,8 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     "depth_registration": LaunchConfiguration("depth_registration"),
+                    "color_fps": camera_fps,
+                    "depth_fps": camera_fps,
                     "align_mode": align_mode,
                     "enable_frame_sync": LaunchConfiguration("enable_frame_sync"),
                     "enable_ir_auto_exposure": LaunchConfiguration(
@@ -54,9 +68,8 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     "model": model,
-                    "depth_aligned_to_color": LaunchConfiguration(
-                        "depth_registration"
-                    ),
+                    "depth_aligned_to_color": LaunchConfiguration("depth_registration"),
+                    "inference_hz": inference_hz,
                 }.items(),
             ),
         ]

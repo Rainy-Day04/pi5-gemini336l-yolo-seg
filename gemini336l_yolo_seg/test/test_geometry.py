@@ -1,6 +1,10 @@
 import numpy as np
 import pytest
-from gemini336l_yolo_seg.geometry import depth_to_meters, project_mask
+from gemini336l_yolo_seg.geometry import (
+    depth_to_meters,
+    format_position_label,
+    project_mask,
+)
 
 
 def test_depth_mm_to_meters():
@@ -25,3 +29,20 @@ def test_project_mask_rejects_too_few_valid_pixels():
     depth[1, 1] = 1.0
     mask = np.ones((3, 3), dtype=np.uint8)
     assert project_mask(mask, depth, 100.0, 100.0, 1.0, 1.0, 0.1, 8.0, 2) is None
+
+
+def test_position_label_contains_xyz_and_frame():
+    assert (
+        format_position_label(1.234, -0.345, 0.456, "base_link", "base_link")
+        == "base x 1.23  y -0.34  z 0.46 m"
+    )
+    assert (
+        format_position_label(
+            1.234,
+            -0.345,
+            0.456,
+            "camera_color_optical_frame",
+            "base_link",
+        )
+        == "cam x 1.23  y -0.34  z 0.46 m"
+    )

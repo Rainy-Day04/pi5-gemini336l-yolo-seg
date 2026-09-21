@@ -19,12 +19,16 @@ def generate_launch_description():
     )
     enable_point_cloud = LaunchConfiguration("enable_point_cloud")
     enable_colored_point_cloud = LaunchConfiguration("enable_colored_point_cloud")
+    color_fps = LaunchConfiguration("color_fps")
+    depth_fps = LaunchConfiguration("depth_fps")
     driver_launch = PathJoinSubstitution(
         [FindPackageShare("orbbec_camera"), "launch", "gemini_330_series.launch.py"]
     )
     return LaunchDescription(
         [
             DeclareLaunchArgument("camera_name", default_value="camera"),
+            DeclareLaunchArgument("color_fps", default_value="30"),
+            DeclareLaunchArgument("depth_fps", default_value="30"),
             DeclareLaunchArgument("depth_registration", default_value="true"),
             DeclareLaunchArgument(
                 "align_mode",
@@ -46,12 +50,12 @@ def generate_launch_description():
                     "enable_color": "true",
                     "color_width": "640",
                     "color_height": "480",
-                    "color_fps": "30",
+                    "color_fps": color_fps,
                     "color_format": "RGB",
                     "enable_depth": "true",
                     "depth_width": "640",
                     "depth_height": "480",
-                    "depth_fps": "30",
+                    "depth_fps": depth_fps,
                     "depth_format": "Y16",
                     "depth_registration": depth_registration,
                     "align_mode": align_mode,
