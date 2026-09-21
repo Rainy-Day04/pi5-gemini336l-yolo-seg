@@ -48,9 +48,14 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "overlay_jpeg_quality",
-                default_value="70",
+                default_value="40",
                 description="JPEG quality for the optional compressed overlay stream.",
             ),
+            DeclareLaunchArgument("overlay_max_width", default_value="480"),
+            DeclareLaunchArgument("preview_hz", default_value="0.0"),
+            DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
+            DeclareLaunchArgument("preview_max_width", default_value="480"),
+            DeclareLaunchArgument("preview_max_seg_age_sec", default_value="0.5"),
             Node(
                 package="gemini336l_yolo_seg",
                 executable="seg_node",
@@ -75,6 +80,22 @@ def generate_launch_description():
                         ),
                         "overlay_jpeg_quality": ParameterValue(
                             LaunchConfiguration("overlay_jpeg_quality"), value_type=int
+                        ),
+                        "overlay_max_width": ParameterValue(
+                            LaunchConfiguration("overlay_max_width"), value_type=int
+                        ),
+                        "preview_hz": ParameterValue(
+                            LaunchConfiguration("preview_hz"), value_type=float
+                        ),
+                        "preview_jpeg_quality": ParameterValue(
+                            LaunchConfiguration("preview_jpeg_quality"), value_type=int
+                        ),
+                        "preview_max_width": ParameterValue(
+                            LaunchConfiguration("preview_max_width"), value_type=int
+                        ),
+                        "preview_max_seg_age_sec": ParameterValue(
+                            LaunchConfiguration("preview_max_seg_age_sec"),
+                            value_type=float,
                         ),
                     },
                 ],

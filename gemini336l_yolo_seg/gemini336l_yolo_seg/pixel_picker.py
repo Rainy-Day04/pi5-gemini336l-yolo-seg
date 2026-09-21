@@ -12,7 +12,7 @@ from cv_bridge import CvBridge
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image
 
 from gemini336l_msgs.srv import QueryPixel3D
 
@@ -26,6 +26,11 @@ class PixelPicker(Node):
             ).value
         )
         self.compressed = bool(self.declare_parameter("compressed", True).value)
+        self.camera_info_topic = str(
+            self.declare_parameter(
+                "camera_info_topic", "/camera/color/camera_info"
+            ).value
+        )
         self.service_name = str(
             self.declare_parameter(
                 "service", "/perception/gemini336l_yolo_seg/query_pixel_3d"
@@ -39,6 +44,8 @@ class PixelPicker(Node):
         self.lock = threading.Lock()
         self.latest_image = None
         self.latest_header = None
+        self.sensor_width = 0
+        self.sensor_height = 0
         self.frozen_image = None
         self.frozen_header = None
         self.pending = None
@@ -47,6 +54,12 @@ class PixelPicker(Node):
         message_type = CompressedImage if self.compressed else Image
         self.create_subscription(
             message_type, self.image_topic, self._image, qos_profile_sensor_data
+        )
+        self.create_subscription(
+            CameraInfo,
+            self.camera_info_topic,
+            self._camera_info,
+            qos_profile_sensor_data,
         )
         cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window, self._mouse)
@@ -69,6 +82,11 @@ class PixelPicker(Node):
             self.latest_image = image.copy()
             self.latest_header = deepcopy(message.header)
 
+    def _camera_info(self, message: CameraInfo) -> None:
+        with self.lock:
+            self.sensor_width = int(message.width)
+            self.sensor_height = int(message.height)
+
     def _mouse(self, event, x, y, _flags, _userdata) -> None:
         if event != cv2.EVENT_LBUTTONDOWN or self.pending is not None:
             return
@@ -79,20 +97,27 @@ class PixelPicker(Node):
             self.frozen_image = self.latest_image.copy()
             self.frozen_header = deepcopy(self.latest_header)
             header = deepcopy(self.frozen_header)
+            display_height, display_width = self.frozen_image.shape[:2]
+            sensor_width = self.sensor_width or display_width
+            sensor_height = self.sensor_height or display_height
         if not self.client.service_is_ready():
             self.get_logger().warning(f"Service unavailable: {self.service_name}")
             return
         request = QueryPixel3D.Request()
         request.image_stamp = header.stamp
-        request.pixel_u = int(x)
-        request.pixel_v = int(y)
+        query_u = min(sensor_width - 1, int(x * sensor_width / display_width))
+        query_v = min(sensor_height - 1, int(y * sensor_height / display_height))
+        request.pixel_u = query_u
+        request.pixel_v = query_v
         request.window_radius = self.radius
         self.pending = self.client.call_async(request)
         self.pending.add_done_callback(
-            lambda future, u=int(x), v=int(y): self._result(future, u, v)
+            lambda future, u=int(x), v=int(y), qu=query_u, qv=query_v: self._result(
+                future, u, v, qu, qv
+            )
         )
 
-    def _result(self, future, u: int, v: int) -> None:
+    def _result(self, future, u: int, v: int, query_u: int, query_v: int) -> None:
         try:
             result = future.result()
             with self.lock:
@@ -105,13 +130,16 @@ class PixelPicker(Node):
                     label = f"{frame} x {p.x:.3f} y {p.y:.3f} z {p.z:.3f} m"
                     color = (0, 255, 0)
                     self.get_logger().info(
-                        f"pixel=({u},{v}) {label}; depth={result.depth_m:.3f} m; "
+                        f"display=({u},{v}) sensor=({query_u},{query_v}) {label}; "
+                        f"depth={result.depth_m:.3f} m; "
                         f"valid_depth_pixels={result.valid_depth_pixels}"
                     )
                 else:
                     label = result.message
                     color = (0, 0, 255)
-                    self.get_logger().warning(f"pixel=({u},{v}) {label}")
+                    self.get_logger().warning(
+                        f"display=({u},{v}) sensor=({query_u},{query_v}) {label}"
+                    )
                 cv2.drawMarker(
                     image,
                     (u, v),

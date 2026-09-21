@@ -133,37 +133,27 @@ export ROS_DOMAIN_ID=23
 `vision` 与原来的 `all` 都只启动相机和 YOLO，不启动导航、任务协调器或机械臂。
 每个检测框都会有第二行坐标；深度、内参或对齐不满足时显示红色 `xyz unavailable`，并在 `objects_3d` 中保持 `position_valid=false`。
 
-### 50 Mbps 网络推荐配置
+### Pi 5 低负载与 50 Mbps 网络推荐配置
 
-Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅 JPEG。推荐 RGB/depth 15 FPS、segmentation 5 FPS：
+Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合成 JPEG。树莓派已经明显卡顿时，推荐先用 RGB/depth 10 FPS、segmentation 3 FPS：
 
 ```bash
 ./scripts/run.sh vision ~/gemini336l_ws \
-  camera_fps:=15 inference_hz:=5.0 \
+  camera_fps:=10 inference_hz:=3.0 \
   depth_registration:=true align_mode:=HW \
   enable_frame_sync:=false enable_point_cloud:=false \
-  overlay_jpeg_quality:=70
+  enable_colored_point_cloud:=false \
+  overlay_jpeg_quality:=40 overlay_max_width:=480 \
+  preview_hz:=0.0
 ```
 
-MiniPC 查看 15 FPS 压缩原图：
+MiniPC 只运行一个合成查看器；它同时显示画面、mask、目标框与 XYZ，并支持点击任意像素查询 XYZ：
 
 ```bash
-ros2 run image_view image_view --ros-args \
-  -r __node:=compressed_camera_view \
-  -r image:=/camera/color/image_raw \
-  -p image_transport:=compressed
+ros2 run gemini336l_yolo_seg pixel_picker
 ```
 
-MiniPC 查看 5 FPS 压缩 segmentation、目标框和 XYZ：
-
-```bash
-ros2 run image_view image_view --ros-args \
-  -r __node:=compressed_yolo_view \
-  -r image:=/perception/gemini336l_yolo_seg/overlay \
-  -p image_transport:=compressed
-```
-
-不要在 MiniPC 订阅两个未压缩的 `Image` topic；它们在 640x480、15+5 FPS 时理论有效载荷仍约 147 Mbps。压缩查看不会改变本机 YOLO、深度匹配或 XYZ 精度。
+合成流缩至 480x360 后再以 JPEG 质量 40 编码。点选器根据 `CameraInfo` 把显示坐标映射回 640x480 传感器坐标，因此降采样不会破坏 XYZ 查询。mask、未压缩 overlay、JPEG 和 2D/3D 消息都按订阅者惰性生成；没有任何检测输出订阅者时 YOLO 自动暂停，但相机与 `query_pixel_3d` 服务仍可用。不要同时打开原图和 overlay 查看器。
 
 ### 点击任意像素查询 XYZ
 
@@ -173,7 +163,7 @@ ros2 run image_view image_view --ros-args \
 ros2 run gemini336l_yolo_seg pixel_picker
 ```
 
-点选器默认订阅压缩 overlay。若要在 15 FPS 压缩原图上点选，使用：
+点选器默认订阅压缩 overlay。若要临时在压缩原图上点选，使用：
 
 ```bash
 ros2 run gemini336l_yolo_seg pixel_picker --ros-args \

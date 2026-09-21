@@ -20,6 +20,11 @@ def generate_launch_description():
     camera_fps = LaunchConfiguration("camera_fps")
     inference_hz = LaunchConfiguration("inference_hz")
     overlay_jpeg_quality = LaunchConfiguration("overlay_jpeg_quality")
+    overlay_max_width = LaunchConfiguration("overlay_max_width")
+    preview_hz = LaunchConfiguration("preview_hz")
+    preview_jpeg_quality = LaunchConfiguration("preview_jpeg_quality")
+    preview_max_width = LaunchConfiguration("preview_max_width")
+    preview_max_seg_age_sec = LaunchConfiguration("preview_max_seg_age_sec")
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -41,9 +46,14 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "overlay_jpeg_quality",
-                default_value="70",
+                default_value="40",
                 description="JPEG quality for the optional compressed overlay stream.",
             ),
+            DeclareLaunchArgument("overlay_max_width", default_value="480"),
+            DeclareLaunchArgument("preview_hz", default_value="0.0"),
+            DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
+            DeclareLaunchArgument("preview_max_width", default_value="480"),
+            DeclareLaunchArgument("preview_max_seg_age_sec", default_value="0.5"),
             DeclareLaunchArgument("align_mode", default_value="SW"),
             DeclareLaunchArgument("enable_frame_sync", default_value="false"),
             DeclareLaunchArgument("enable_ir_auto_exposure", default_value="false"),
@@ -77,6 +87,11 @@ def generate_launch_description():
                     "depth_aligned_to_color": LaunchConfiguration("depth_registration"),
                     "inference_hz": inference_hz,
                     "overlay_jpeg_quality": overlay_jpeg_quality,
+                    "overlay_max_width": overlay_max_width,
+                    "preview_hz": preview_hz,
+                    "preview_jpeg_quality": preview_jpeg_quality,
+                    "preview_max_width": preview_max_width,
+                    "preview_max_seg_age_sec": preview_max_seg_age_sec,
                 }.items(),
             ),
         ]

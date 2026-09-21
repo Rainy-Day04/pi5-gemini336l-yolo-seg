@@ -8,15 +8,26 @@ gemini336l_yolo_seg:
     overlay_topic: ~/overlay
     overlay_compressed_topic: ~/overlay/compressed
     # Cross-machine viewer stream. Encoding only runs while it has subscribers.
-    overlay_jpeg_quality: 70
+    overlay_jpeg_quality: 40
+    overlay_max_width: 480
+    # Optional higher-rate preview reuses detections and costs extra CPU; off by default.
+    preview_compressed_topic: ~/preview/compressed
+    preview_hz: 0.0
+    preview_jpeg_quality: 45
+    preview_max_width: 480
+    preview_max_seg_age_sec: 0.5
     objects_3d_topic: ~/objects_3d
+    # With no detection/image subscribers, keep RGB-D query service alive but pause YOLO.
+    run_inference_when_unsubscribed: false
 
     # Pi 5 starting point: raise to 384 only after checking temperature and FPS.
     inference_hz: 5.0
     imgsz: 320
     confidence_threshold: 0.35
     iou_threshold: 0.45
-    max_detections: 30
+    max_detections: 15
+    # Lower-resolution mask post-processing; masks are resized only where needed.
+    retina_masks: false
     # COCO class IDs, comma-separated. Empty means all classes.
     classes: ""
 

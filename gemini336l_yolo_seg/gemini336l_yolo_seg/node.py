@@ -55,8 +55,8 @@ class Detection:
 class WorkResult:
     item: WorkItem
     detections: list[Detection]
-    label_mask: np.ndarray
-    overlay: np.ndarray
+    label_mask: np.ndarray | None
+    overlay: np.ndarray | None
     inference_ms: float
     error: str | None = None
 
@@ -84,6 +84,7 @@ class SegmentationNode(Node):
         self._lock = threading.Lock()
         self._latest_color: Image | None = None
         self._latest_info: CameraInfo | None = None
+        self._latest_visual: tuple[list[Detection], Object3DArray, int] | None = None
         # Keep enough aligned depth history for a human clicking a recently
         # displayed network frame (about 1.5 s at 30 FPS).
         self._depth_frames: deque[Image] = deque(maxlen=45)
@@ -106,6 +107,12 @@ class SegmentationNode(Node):
 
         rate = max(0.1, float(self.get_parameter("inference_hz").value))
         self._timer = self.create_timer(1.0 / rate, self._on_timer)
+        preview_rate = float(self.get_parameter("preview_hz").value)
+        self._preview_timer = (
+            self.create_timer(1.0 / preview_rate, self._publish_preview)
+            if preview_rate > 0.0
+            else None
+        )
         self.get_logger().info(
             f"Ready: {rate:.1f} Hz inference, latest-frame queue, "
             f"model={self.get_parameter('model_path').value}"
@@ -121,13 +128,22 @@ class SegmentationNode(Node):
             "detections_topic": "~/detections_2d",
             "overlay_topic": "~/overlay",
             "overlay_compressed_topic": "~/overlay/compressed",
-            "overlay_jpeg_quality": 70,
+            "overlay_jpeg_quality": 40,
+            "overlay_max_width": 480,
+            "preview_compressed_topic": "~/preview/compressed",
+            # Optional stale-overlay preview is off in the low-load profile.
+            "preview_hz": 0.0,
+            "preview_jpeg_quality": 50,
+            "preview_max_width": 480,
+            "preview_max_seg_age_sec": 0.5,
             "objects_3d_topic": "~/objects_3d",
+            "run_inference_when_unsubscribed": False,
             "inference_hz": 5.0,
             "imgsz": 320,
             "confidence_threshold": 0.35,
             "iou_threshold": 0.45,
-            "max_detections": 30,
+            "max_detections": 15,
+            "retina_masks": False,
             "classes": "",
             "max_depth_time_delta_sec": 0.20,
             "min_depth_m": 0.15,
@@ -182,6 +198,11 @@ class SegmentationNode(Node):
             str(self.get_parameter("overlay_compressed_topic").value),
             qos_profile_sensor_data,
         )
+        self._preview_compressed_pub = self.create_publisher(
+            CompressedImage,
+            str(self.get_parameter("preview_compressed_topic").value),
+            qos_profile_sensor_data,
+        )
         self._detections_pub = self.create_publisher(
             Object2DArray, str(self.get_parameter("detections_topic").value), 10
         )
@@ -201,6 +222,94 @@ class SegmentationNode(Node):
     def _on_camera_info(self, message: CameraInfo) -> None:
         with self._lock:
             self._latest_info = message
+
+    def _has_inference_consumers(self) -> bool:
+        if bool(self.get_parameter("run_inference_when_unsubscribed").value):
+            return True
+        publishers = (
+            self._mask_pub,
+            self._overlay_pub,
+            self._overlay_compressed_pub,
+            self._preview_compressed_pub,
+            self._detections_pub,
+            self._objects_3d_pub,
+        )
+        return any(pub.get_subscription_count() > 0 for pub in publishers)
+
+    @staticmethod
+    def _resize_for_stream(image: np.ndarray, max_width: int) -> np.ndarray:
+        if max_width <= 0 or image.shape[1] <= max_width:
+            return image
+        scale = max_width / float(image.shape[1])
+        size = (max_width, max(1, int(round(image.shape[0] * scale))))
+        return cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+    def _jpeg_message(
+        self,
+        image: np.ndarray,
+        header,
+        quality_parameter: str,
+        width_parameter: str,
+    ) -> CompressedImage | None:
+        quality = max(1, min(100, int(self.get_parameter(quality_parameter).value)))
+        max_width = int(self.get_parameter(width_parameter).value)
+        image = self._resize_for_stream(image, max_width)
+        ok, encoded = cv2.imencode(
+            ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality]
+        )
+        if not ok:
+            return None
+        message = CompressedImage()
+        message.header = header
+        message.format = "jpeg"
+        message.data = encoded.tobytes()
+        return message
+
+    def _publish_preview(self) -> None:
+        if self._preview_compressed_pub.get_subscription_count() == 0:
+            return
+        with self._lock:
+            color = self._latest_color
+            visual = self._latest_visual
+        if color is None:
+            return
+        try:
+            image = self._bridge.imgmsg_to_cv2(color, desired_encoding="bgr8")
+            if visual is not None:
+                detections, objects_3d, visual_stamp_ns = visual
+                age_sec = (_stamp_ns(color) - visual_stamp_ns) / 1e9
+                max_age = float(
+                    self.get_parameter("preview_max_seg_age_sec").value
+                )
+                if 0.0 <= age_sec <= max_age:
+                    self._draw_detection_shapes(image, detections)
+                    if bool(
+                        self.get_parameter("show_distance_on_overlay").value
+                    ):
+                        self._draw_distance_labels(image, detections, objects_3d)
+                    cv2.putText(
+                        image,
+                        f"seg age {age_sec:.2f}s",
+                        (8, image.shape[0] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.42,
+                        (0, 255, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
+            message = self._jpeg_message(
+                image,
+                color.header,
+                "preview_jpeg_quality",
+                "preview_max_width",
+            )
+            if message is not None:
+                self._preview_compressed_pub.publish(message)
+        except Exception as exc:  # noqa: BLE001 - malformed image must not stop YOLO
+            now = time.monotonic()
+            if now - self._last_warning_time > 5.0:
+                self.get_logger().warning(f"Failed to publish JPEG preview: {exc}")
+                self._last_warning_time = now
 
     def _nearest_depth(self, stamp_ns: int) -> Image | None:
         if not self._depth_frames:
@@ -309,6 +418,8 @@ class SegmentationNode(Node):
 
     def _on_timer(self) -> None:
         self._publish_available_result()
+        if not self._has_inference_consumers():
+            return
         with self._lock:
             color = self._latest_color
             info = self._latest_info
@@ -344,10 +455,7 @@ class SegmentationNode(Node):
             try:
                 result = self._infer(item)
             except Exception as exc:  # noqa: BLE001 - one bad frame must not stop ROS.
-                empty = np.zeros((1, 1), dtype=np.uint16)
-                result = WorkResult(
-                    item, [], empty, np.zeros((1, 1, 3), np.uint8), 0.0, str(exc)
-                )
+                result = WorkResult(item, [], None, None, 0.0, str(exc))
             while True:
                 try:
                     self._results.get_nowait()
@@ -370,14 +478,22 @@ class SegmentationNode(Node):
             max_det=int(self.get_parameter("max_detections").value),
             classes=self._class_filter(),
             device="cpu",
-            retina_masks=True,
+            retina_masks=bool(self.get_parameter("retina_masks").value),
             verbose=False,
         )[0]
         inference_ms = (time.perf_counter() - start) * 1000.0
 
         height, width = bgr.shape[:2]
-        label_mask = np.zeros((height, width), dtype=np.uint16)
-        overlay = bgr.copy()
+        label_mask = (
+            np.zeros((height, width), dtype=np.uint16)
+            if self._mask_pub.get_subscription_count() > 0
+            else None
+        )
+        need_overlay = (
+            self._overlay_pub.get_subscription_count() > 0
+            or self._overlay_compressed_pub.get_subscription_count() > 0
+        )
+        overlay = bgr.copy() if need_overlay else None
         detections: list[Detection] = []
         if result.boxes is None or result.masks is None:
             return WorkResult(item, detections, label_mask, overlay, inference_ms)
@@ -387,7 +503,6 @@ class SegmentationNode(Node):
         confidences = _as_numpy(result.boxes.conf)
         masks = _as_numpy(result.masks.data)
         count = min(len(boxes), len(masks), 65534)
-        alpha = float(self.get_parameter("mask_alpha").value)
         names = result.names
 
         for index in range(count):
@@ -398,7 +513,8 @@ class SegmentationNode(Node):
                 )
             binary = mask > 0.5
             instance_id = index + 1
-            label_mask[binary] = instance_id
+            if label_mask is not None:
+                label_mask[binary] = instance_id
             class_id = int(classes[index])
             class_name = str(
                 names[class_id]
@@ -421,15 +537,33 @@ class SegmentationNode(Node):
                 mask=binary,
             )
             detections.append(detection)
-            color = self._color_for_class(class_id)
+        if overlay is not None:
+            self._draw_detection_shapes(overlay, detections)
+        return WorkResult(item, detections, label_mask, overlay, inference_ms)
+
+    def _draw_detection_shapes(
+        self, overlay: np.ndarray, detections: list[Detection]
+    ) -> None:
+        height, width = overlay.shape[:2]
+        alpha = float(self.get_parameter("mask_alpha").value)
+        for detection in detections:
+            binary = detection.mask
+            if binary.shape != (height, width):
+                binary = cv2.resize(
+                    binary.astype(np.uint8),
+                    (width, height),
+                    interpolation=cv2.INTER_NEAREST,
+                ).astype(bool)
+            color = self._color_for_class(detection.class_id)
             overlay[binary] = (
                 overlay[binary].astype(np.float32) * (1.0 - alpha)
                 + np.asarray(color, dtype=np.float32) * alpha
             ).astype(np.uint8)
+            x1, y1, x2, y2 = detection.box
             cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
             cv2.putText(
                 overlay,
-                f"{class_name} {detection.confidence:.2f}",
+                f"{detection.class_name} {detection.confidence:.2f}",
                 (x1, max(15, y1 - 5)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.45,
@@ -437,7 +571,6 @@ class SegmentationNode(Node):
                 1,
                 cv2.LINE_AA,
             )
-        return WorkResult(item, detections, label_mask, overlay, inference_ms)
 
     @staticmethod
     def _color_for_class(class_id: int) -> tuple[int, int, int]:
@@ -457,36 +590,63 @@ class SegmentationNode(Node):
             self.get_logger().error(f"Inference frame failed: {result.error}")
             return
 
-        objects_3d_message = self._make_3d_message(result)
-        overlay = result.overlay.copy()
-        if bool(self.get_parameter("show_distance_on_overlay").value):
+        need_raw_overlay = self._overlay_pub.get_subscription_count() > 0
+        need_compressed = self._overlay_compressed_pub.get_subscription_count() > 0
+        need_preview = (
+            self._preview_timer is not None
+            and self._preview_compressed_pub.get_subscription_count() > 0
+        )
+        need_objects = self._objects_3d_pub.get_subscription_count() > 0
+        need_3d = need_raw_overlay or need_compressed or need_preview or need_objects
+        objects_3d_message = self._make_3d_message(result) if need_3d else None
+
+        overlay = None if result.overlay is None else result.overlay.copy()
+        if (
+            overlay is not None
+            and objects_3d_message is not None
+            and bool(self.get_parameter("show_distance_on_overlay").value)
+        ):
             self._draw_distance_labels(overlay, result.detections, objects_3d_message)
 
-        mask_message = self._bridge.cv2_to_imgmsg(result.label_mask, encoding="mono16")
-        mask_message.header = result.item.color.header
-        overlay_message = self._bridge.cv2_to_imgmsg(overlay, encoding="bgr8")
-        overlay_message.header = result.item.color.header
-        self._mask_pub.publish(mask_message)
-        self._overlay_pub.publish(overlay_message)
+        if need_preview and objects_3d_message is not None:
+            with self._lock:
+                self._latest_visual = (
+                    list(result.detections),
+                    deepcopy(objects_3d_message),
+                    _stamp_ns(result.item.color),
+                )
+
+        if (
+            self._mask_pub.get_subscription_count() > 0
+            and result.label_mask is not None
+        ):
+            mask_message = self._bridge.cv2_to_imgmsg(
+                result.label_mask, encoding="mono16"
+            )
+            mask_message.header = result.item.color.header
+            self._mask_pub.publish(mask_message)
+
+        if need_raw_overlay and overlay is not None:
+            overlay_message = self._bridge.cv2_to_imgmsg(overlay, encoding="bgr8")
+            overlay_message.header = result.item.color.header
+            self._overlay_pub.publish(overlay_message)
         # JPEG encoding is deliberately subscriber-driven.  The Pi pays no
         # encoding cost unless a remote viewer actually uses this topic.
-        if self._overlay_compressed_pub.get_subscription_count() > 0:
-            quality = max(
-                1, min(100, int(self.get_parameter("overlay_jpeg_quality").value))
+        if need_compressed and overlay is not None:
+            compressed = self._jpeg_message(
+                overlay,
+                result.item.color.header,
+                "overlay_jpeg_quality",
+                "overlay_max_width",
             )
-            ok, encoded = cv2.imencode(
-                ".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, quality]
-            )
-            if ok:
-                compressed = CompressedImage()
-                compressed.header = result.item.color.header
-                compressed.format = "jpeg"
-                compressed.data = encoded.tobytes()
+            if compressed is not None:
                 self._overlay_compressed_pub.publish(compressed)
             else:
                 self.get_logger().warning("Failed to JPEG-encode overlay")
-        self._detections_pub.publish(self._make_2d_message(result))
-        self._objects_3d_pub.publish(objects_3d_message)
+        if self._detections_pub.get_subscription_count() > 0:
+            self._detections_pub.publish(self._make_2d_message(result))
+        if need_objects and objects_3d_message is not None:
+            self._objects_3d_pub.publish(objects_3d_message)
 
         if time.monotonic() - self._last_status_time > 5.0:
             self.get_logger().info(
@@ -532,7 +692,11 @@ class SegmentationNode(Node):
                     depth_message, desired_encoding="passthrough"
                 )
                 depth_m = depth_to_meters(raw_depth, depth_message.encoding)
-                if depth_m.shape != result.label_mask.shape:
+                expected_shape = (
+                    int(result.item.color.height),
+                    int(result.item.color.width),
+                )
+                if depth_m.shape != expected_shape:
                     self._warn_throttled(
                         "Aligned depth size does not match RGB; 3D positions are invalid. "
                         "Start the camera with depth_registration:=true and align_target_stream:=COLOR."
