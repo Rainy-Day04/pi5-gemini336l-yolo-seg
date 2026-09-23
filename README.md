@@ -135,7 +135,7 @@ export ROS_DOMAIN_ID=23
 
 ### Pi 5 低负载与低带宽网络推荐配置
 
-Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合成 JPEG。默认保持 segmentation/XYZ 5 FPS，只把远程画面限制为 3 FPS：
+Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合成 JPEG。segmentation、XYZ 和远程画面全部保持 5 FPS，通过 JPEG 质量 40 降低带宽：
 
 ```bash
 ./scripts/run.sh vision ~/gemini336l_ws \
@@ -143,7 +143,7 @@ Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合�
   depth_registration:=true align_mode:=SW \
   enable_frame_sync:=false enable_point_cloud:=false \
   enable_colored_point_cloud:=false \
-  overlay_publish_hz:=3.0 overlay_jpeg_quality:=42 overlay_max_width:=640 \
+  overlay_publish_hz:=5.0 overlay_jpeg_quality:=40 overlay_max_width:=640 \
   preview_hz:=0.0 retina_masks:=true \
   confidence_threshold:=0.20 max_detections:=15 \
   run_inference_when_unsubscribed:=false
@@ -155,7 +155,7 @@ MiniPC 只运行一个合成查看器；它同时显示画面、mask、目标框
 ros2 run gemini336l_yolo_seg pixel_picker
 ```
 
-合成流保留相机原生 640x480，默认独立限制为 3 FPS。`overlay_publish_hz` 不会降低 YOLO、detections 或 objects_3d 的 5 FPS。mask 在原图坐标生成，避免 320x320 letterbox 直接拉伸导致人物与 mask 错位。mask、未压缩 overlay、JPEG 和 2D/3D 消息都按订阅者惰性生成；没有任何检测输出订阅者时 YOLO 自动暂停，但相机与 `query_pixel_3d` 服务仍可用。不要同时打开原图和 overlay 查看器。
+合成流保留相机原生 640x480，默认保持 5 FPS。`overlay_publish_hz` 只控制压缩画面，YOLO、detections 和 objects_3d 也保持 5 FPS。mask 在原图坐标生成，避免 320x320 letterbox 直接拉伸导致人物与 mask 错位。mask、未压缩 overlay、JPEG 和 2D/3D 消息都按订阅者惰性生成；没有任何检测输出订阅者时 YOLO 自动暂停，但相机与 `query_pixel_3d` 服务仍可用。不要同时打开原图和 overlay 查看器。
 
 ### 点击任意像素查询 XYZ
 

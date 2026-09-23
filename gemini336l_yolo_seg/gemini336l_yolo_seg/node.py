@@ -130,10 +130,10 @@ class SegmentationNode(Node):
             "detections_topic": "~/detections_2d",
             "overlay_topic": "~/overlay",
             "overlay_compressed_topic": "~/overlay/compressed",
-            "overlay_jpeg_quality": 50,
+            "overlay_jpeg_quality": 40,
             # Remote video is independent of inference.  A lower rate saves
             # Wi-Fi bandwidth without reducing detection/Object3D updates.
-            "overlay_publish_hz": 3.0,
+            "overlay_publish_hz": 5.0,
             # 640x480 camera output is preserved for the remote overlay.
             "overlay_max_width": 640,
             "preview_compressed_topic": "~/preview/compressed",

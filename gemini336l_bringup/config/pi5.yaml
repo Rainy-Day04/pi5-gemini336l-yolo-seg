@@ -8,8 +8,8 @@ gemini336l_yolo_seg:
     overlay_topic: ~/overlay
     overlay_compressed_topic: ~/overlay/compressed
     # Cross-machine viewer stream. Encoding only runs while it has subscribers.
-    overlay_jpeg_quality: 50
-    overlay_publish_hz: 3.0  # inference remains 5 Hz; only remote JPEG is throttled
+    overlay_jpeg_quality: 40
+    overlay_publish_hz: 5.0  # remote image and inference both remain at 5 FPS
     overlay_max_width: 640  # preserve the native 640x480 camera frame
     # Optional higher-rate preview reuses detections and costs extra CPU; off by default.
     preview_compressed_topic: ~/preview/compressed
