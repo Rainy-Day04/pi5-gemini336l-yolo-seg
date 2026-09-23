@@ -51,10 +51,10 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "overlay_jpeg_quality",
-                default_value="40",
+                default_value="50",
                 description="JPEG quality for the optional compressed overlay stream.",
             ),
-            DeclareLaunchArgument("overlay_max_width", default_value="480"),
+            DeclareLaunchArgument("overlay_max_width", default_value="640"),
             DeclareLaunchArgument("preview_hz", default_value="0.0"),
             DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
             DeclareLaunchArgument("preview_max_width", default_value="480"),

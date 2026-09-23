@@ -128,8 +128,9 @@ class SegmentationNode(Node):
             "detections_topic": "~/detections_2d",
             "overlay_topic": "~/overlay",
             "overlay_compressed_topic": "~/overlay/compressed",
-            "overlay_jpeg_quality": 40,
-            "overlay_max_width": 480,
+            "overlay_jpeg_quality": 50,
+            # 640x480 camera output is preserved for the remote overlay.
+            "overlay_max_width": 640,
             "preview_compressed_topic": "~/preview/compressed",
             # Optional stale-overlay preview is off in the low-load profile.
             "preview_hz": 0.0,
