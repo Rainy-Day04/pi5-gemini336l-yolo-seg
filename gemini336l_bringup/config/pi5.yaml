@@ -23,7 +23,8 @@ gemini336l_yolo_seg:
     # Pi 5 starting point: raise to 384 only after checking temperature and FPS.
     inference_hz: 5.0
     imgsz: 320
-    confidence_threshold: 0.35
+    # Lower threshold reduces frame-to-frame person segmentation flicker.
+    confidence_threshold: 0.20
     iou_threshold: 0.45
     max_detections: 15
     # Required for pixel-accurate masks on 640x480 letterboxed model input.

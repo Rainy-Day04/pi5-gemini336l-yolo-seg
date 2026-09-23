@@ -141,7 +141,7 @@ class SegmentationNode(Node):
             "run_inference_when_unsubscribed": False,
             "inference_hz": 5.0,
             "imgsz": 320,
-            "confidence_threshold": 0.35,
+            "confidence_threshold": 0.20,
             "iou_threshold": 0.45,
             "max_detections": 15,
             # Keep masks in original-image coordinates.  Resizing letterboxed

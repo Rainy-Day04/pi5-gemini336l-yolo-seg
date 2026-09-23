@@ -145,7 +145,8 @@ Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合�
   enable_colored_point_cloud:=false \
   overlay_jpeg_quality:=50 overlay_max_width:=640 \
   preview_hz:=0.0 retina_masks:=true \
-  max_detections:=15 run_inference_when_unsubscribed:=false
+  confidence_threshold:=0.20 max_detections:=15 \
+  run_inference_when_unsubscribed:=false
 ```
 
 MiniPC 只运行一个合成查看器；它同时显示画面、mask、目标框与 XYZ，并支持点击任意像素查询 XYZ：
@@ -315,7 +316,7 @@ YOLO26n-seg 预训练模型识别 COCO 80 类；非 COCO 目标需要自训练�
 
 - `inference_hz`: 默认 `5.0`
 - `imgsz`: 默认 `320`
-- `confidence_threshold`: 默认 `0.35`
+- `confidence_threshold`: 默认 `0.20`，减少人物检测在相邻帧间闪烁
 - `classes`: COCO class id，以逗号分隔，如 `"0,39,56"`
 - `max_depth_time_delta_sec`: RGB 与 depth 最大时间差
 - `min_depth_m` / `max_depth_m`: 3D 有效深度范围

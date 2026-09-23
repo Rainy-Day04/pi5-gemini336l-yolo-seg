@@ -58,6 +58,7 @@ def generate_launch_description():
             DeclareLaunchArgument("preview_max_seg_age_sec", default_value="0.5"),
             DeclareLaunchArgument("retina_masks", default_value="true"),
             DeclareLaunchArgument("max_detections", default_value="15"),
+            DeclareLaunchArgument("confidence_threshold", default_value="0.20"),
             DeclareLaunchArgument(
                 "run_inference_when_unsubscribed", default_value="false"
             ),
@@ -107,6 +108,10 @@ def generate_launch_description():
                         ),
                         "max_detections": ParameterValue(
                             LaunchConfiguration("max_detections"), value_type=int
+                        ),
+                        "confidence_threshold": ParameterValue(
+                            LaunchConfiguration("confidence_threshold"),
+                            value_type=float,
                         ),
                         "run_inference_when_unsubscribed": ParameterValue(
                             LaunchConfiguration("run_inference_when_unsubscribed"),
