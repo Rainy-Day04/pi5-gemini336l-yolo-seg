@@ -69,6 +69,50 @@ def project_mask(
     return Projection(x=x, y=y, z=z, u=u, v=v, valid_pixels=count)
 
 
+def project_mask_roi(
+    mask: np.ndarray,
+    depth_m: np.ndarray,
+    box: tuple[int, int, int, int],
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+    min_depth_m: float,
+    max_depth_m: float,
+    min_valid_pixels: int,
+) -> Projection | None:
+    """Project a mask while scanning only its clipped bounding-box region."""
+    if mask.shape != depth_m.shape:
+        raise ValueError("mask and depth image must have the same shape")
+    height, width = mask.shape
+    x1, y1, x2, y2 = box
+    x1 = max(0, min(width - 1, int(x1)))
+    x2 = max(x1, min(width - 1, int(x2)))
+    y1 = max(0, min(height - 1, int(y1)))
+    y2 = max(y1, min(height - 1, int(y2)))
+    result = project_mask(
+        mask[y1 : y2 + 1, x1 : x2 + 1],
+        depth_m[y1 : y2 + 1, x1 : x2 + 1],
+        fx,
+        fy,
+        cx - float(x1),
+        cy - float(y1),
+        min_depth_m,
+        max_depth_m,
+        min_valid_pixels,
+    )
+    if result is None:
+        return None
+    return Projection(
+        x=result.x,
+        y=result.y,
+        z=result.z,
+        u=result.u + x1,
+        v=result.v + y1,
+        valid_pixels=result.valid_pixels,
+    )
+
+
 def project_pixel(
     depth_m: np.ndarray,
     u: int,

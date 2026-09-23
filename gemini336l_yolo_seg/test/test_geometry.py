@@ -4,6 +4,7 @@ from gemini336l_yolo_seg.geometry import (
     depth_to_meters,
     format_position_label,
     project_mask,
+    project_mask_roi,
     project_pixel,
 )
 
@@ -30,6 +31,27 @@ def test_project_mask_rejects_too_few_valid_pixels():
     depth[1, 1] = 1.0
     mask = np.ones((3, 3), dtype=np.uint8)
     assert project_mask(mask, depth, 100.0, 100.0, 1.0, 1.0, 0.1, 8.0, 2) is None
+
+
+def test_project_mask_roi_matches_full_image_projection():
+    depth = np.full((20, 30), 2.0, dtype=np.float32)
+    mask = np.zeros((20, 30), dtype=np.uint8)
+    mask[7:13, 11:19] = 1
+    full = project_mask(mask, depth, 100.0, 110.0, 15.0, 10.0, 0.1, 8.0, 3)
+    roi = project_mask_roi(
+        mask,
+        depth,
+        (10, 6, 19, 13),
+        100.0,
+        110.0,
+        15.0,
+        10.0,
+        0.1,
+        8.0,
+        3,
+    )
+    assert full is not None and roi is not None
+    assert roi == full
 
 
 def test_position_label_contains_xyz_and_frame():

@@ -29,7 +29,7 @@ from gemini336l_msgs.srv import QueryPixel3D
 from .geometry import (
     depth_to_meters,
     format_position_label,
-    project_mask,
+    project_mask_roi,
     project_pixel,
 )
 
@@ -558,11 +558,13 @@ class SegmentationNode(Node):
                     interpolation=cv2.INTER_NEAREST,
                 ).astype(bool)
             color = self._color_for_class(detection.class_id)
-            overlay[binary] = (
-                overlay[binary].astype(np.float32) * (1.0 - alpha)
+            x1, y1, x2, y2 = detection.box
+            overlay_roi = overlay[y1 : y2 + 1, x1 : x2 + 1]
+            mask_roi = binary[y1 : y2 + 1, x1 : x2 + 1]
+            overlay_roi[mask_roi] = (
+                overlay_roi[mask_roi].astype(np.float32) * (1.0 - alpha)
                 + np.asarray(color, dtype=np.float32) * alpha
             ).astype(np.uint8)
-            x1, y1, x2, y2 = detection.box
             cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
             cv2.putText(
                 overlay,
@@ -715,9 +717,10 @@ class SegmentationNode(Node):
             obj.class_name = detection.class_name
             obj.confidence = detection.confidence
             if depth_m is not None and info is not None:
-                projection = project_mask(
+                projection = project_mask_roi(
                     detection.mask,
                     depth_m,
+                    detection.box,
                     float(info.k[0]),
                     float(info.k[4]),
                     float(info.k[2]),
