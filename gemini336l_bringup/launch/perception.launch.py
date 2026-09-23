@@ -51,6 +51,11 @@ def generate_launch_description():
                 default_value="50",
                 description="JPEG quality for the optional compressed overlay stream.",
             ),
+            DeclareLaunchArgument(
+                "overlay_publish_hz",
+                default_value="3.0",
+                description="Remote JPEG rate; independent of YOLO inference_hz.",
+            ),
             DeclareLaunchArgument("overlay_max_width", default_value="640"),
             DeclareLaunchArgument("preview_hz", default_value="0.0"),
             DeclareLaunchArgument("preview_jpeg_quality", default_value="45"),
@@ -86,6 +91,9 @@ def generate_launch_description():
                         ),
                         "overlay_jpeg_quality": ParameterValue(
                             LaunchConfiguration("overlay_jpeg_quality"), value_type=int
+                        ),
+                        "overlay_publish_hz": ParameterValue(
+                            LaunchConfiguration("overlay_publish_hz"), value_type=float
                         ),
                         "overlay_max_width": ParameterValue(
                             LaunchConfiguration("overlay_max_width"), value_type=int

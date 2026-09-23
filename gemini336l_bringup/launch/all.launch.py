@@ -20,6 +20,7 @@ def generate_launch_description():
     camera_fps = LaunchConfiguration("camera_fps")
     inference_hz = LaunchConfiguration("inference_hz")
     overlay_jpeg_quality = LaunchConfiguration("overlay_jpeg_quality")
+    overlay_publish_hz = LaunchConfiguration("overlay_publish_hz")
     overlay_max_width = LaunchConfiguration("overlay_max_width")
     preview_hz = LaunchConfiguration("preview_hz")
     preview_jpeg_quality = LaunchConfiguration("preview_jpeg_quality")
@@ -54,6 +55,11 @@ def generate_launch_description():
                 "overlay_jpeg_quality",
                 default_value="50",
                 description="JPEG quality for the optional compressed overlay stream.",
+            ),
+            DeclareLaunchArgument(
+                "overlay_publish_hz",
+                default_value="3.0",
+                description="Remote JPEG rate; independent of YOLO inference_hz.",
             ),
             DeclareLaunchArgument("overlay_max_width", default_value="640"),
             DeclareLaunchArgument("preview_hz", default_value="0.0"),
@@ -99,6 +105,7 @@ def generate_launch_description():
                     "depth_aligned_to_color": LaunchConfiguration("depth_registration"),
                     "inference_hz": inference_hz,
                     "overlay_jpeg_quality": overlay_jpeg_quality,
+                    "overlay_publish_hz": overlay_publish_hz,
                     "overlay_max_width": overlay_max_width,
                     "preview_hz": preview_hz,
                     "preview_jpeg_quality": preview_jpeg_quality,

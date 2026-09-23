@@ -91,6 +91,7 @@ class SegmentationNode(Node):
         self._last_enqueued_stamp = -1
         self._last_warning_time = 0.0
         self._last_status_time = 0.0
+        self._next_overlay_publish_time = 0.0
 
         self._work: queue.Queue[WorkItem | None] = queue.Queue(maxsize=1)
         self._results: queue.Queue[WorkResult] = queue.Queue(maxsize=1)
@@ -115,7 +116,8 @@ class SegmentationNode(Node):
         )
         self.get_logger().info(
             f"Ready: {rate:.1f} Hz inference, latest-frame queue, "
-            f"model={self.get_parameter('model_path').value}"
+            f"{float(self.get_parameter('overlay_publish_hz').value):.1f} Hz "
+            f"compressed overlay, model={self.get_parameter('model_path').value}"
         )
 
     def _declare_parameters(self) -> None:
@@ -129,6 +131,9 @@ class SegmentationNode(Node):
             "overlay_topic": "~/overlay",
             "overlay_compressed_topic": "~/overlay/compressed",
             "overlay_jpeg_quality": 50,
+            # Remote video is independent of inference.  A lower rate saves
+            # Wi-Fi bandwidth without reducing detection/Object3D updates.
+            "overlay_publish_hz": 3.0,
             # 640x480 camera output is preserved for the remote overlay.
             "overlay_max_width": 640,
             "preview_compressed_topic": "~/preview/compressed",
@@ -596,7 +601,12 @@ class SegmentationNode(Node):
             return
 
         need_raw_overlay = self._overlay_pub.get_subscription_count() > 0
-        need_compressed = self._overlay_compressed_pub.get_subscription_count() > 0
+        has_compressed_subscriber = (
+            self._overlay_compressed_pub.get_subscription_count() > 0
+        )
+        need_compressed = (
+            has_compressed_subscriber and self._compressed_overlay_is_due()
+        )
         need_preview = (
             self._preview_timer is not None
             and self._preview_compressed_pub.get_subscription_count() > 0
@@ -659,6 +669,26 @@ class SegmentationNode(Node):
                 f"depth_matched={result.item.depth is not None}"
             )
             self._last_status_time = time.monotonic()
+
+    def _compressed_overlay_is_due(self) -> bool:
+        """Rate-limit only the remote JPEG; inference/messages keep full rate."""
+        rate = float(self.get_parameter("overlay_publish_hz").value)
+        if rate <= 0.0:
+            return True
+        now = time.monotonic()
+        if now < self._next_overlay_publish_time:
+            return False
+        interval = 1.0 / max(0.1, rate)
+        # Advance from the previous deadline to avoid long-term drift.  Reset
+        # after a pause so reconnecting a viewer publishes immediately.
+        if self._next_overlay_publish_time <= 0.0 or (
+            now - self._next_overlay_publish_time > 4.0 * interval
+        ):
+            self._next_overlay_publish_time = now + interval
+        else:
+            while self._next_overlay_publish_time <= now:
+                self._next_overlay_publish_time += interval
+        return True
 
     @staticmethod
     def _make_2d_message(result: WorkResult) -> Object2DArray:
