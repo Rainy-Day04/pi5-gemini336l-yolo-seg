@@ -146,7 +146,7 @@ Pi 内部继续用原始 RGB/depth 做推理和 XYZ，MiniPC 只订阅一条合�
   overlay_publish_hz:=5.0 overlay_jpeg_quality:=40 overlay_max_width:=640 \
   preview_hz:=0.0 retina_masks:=true \
   confidence_threshold:=0.20 max_detections:=15 \
-  depth_candidate_frames:=3 \
+  max_depth_time_delta_sec:=0.30 depth_candidate_frames:=3 \
   run_inference_when_unsubscribed:=false
 ```
 

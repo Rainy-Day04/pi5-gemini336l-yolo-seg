@@ -29,6 +29,7 @@ def generate_launch_description():
     retina_masks = LaunchConfiguration("retina_masks")
     max_detections = LaunchConfiguration("max_detections")
     confidence_threshold = LaunchConfiguration("confidence_threshold")
+    max_depth_time_delta_sec = LaunchConfiguration("max_depth_time_delta_sec")
     depth_candidate_frames = LaunchConfiguration("depth_candidate_frames")
     run_inference_when_unsubscribed = LaunchConfiguration(
         "run_inference_when_unsubscribed"
@@ -70,6 +71,9 @@ def generate_launch_description():
             DeclareLaunchArgument("retina_masks", default_value="true"),
             DeclareLaunchArgument("max_detections", default_value="15"),
             DeclareLaunchArgument("confidence_threshold", default_value="0.20"),
+            DeclareLaunchArgument(
+                "max_depth_time_delta_sec", default_value="0.20"
+            ),
             DeclareLaunchArgument("depth_candidate_frames", default_value="3"),
             DeclareLaunchArgument(
                 "run_inference_when_unsubscribed", default_value="false"
@@ -116,6 +120,7 @@ def generate_launch_description():
                     "retina_masks": retina_masks,
                     "max_detections": max_detections,
                     "confidence_threshold": confidence_threshold,
+                    "max_depth_time_delta_sec": max_depth_time_delta_sec,
                     "depth_candidate_frames": depth_candidate_frames,
                     "run_inference_when_unsubscribed": (
                         run_inference_when_unsubscribed

@@ -64,6 +64,9 @@ def generate_launch_description():
             DeclareLaunchArgument("retina_masks", default_value="true"),
             DeclareLaunchArgument("max_detections", default_value="15"),
             DeclareLaunchArgument("confidence_threshold", default_value="0.20"),
+            DeclareLaunchArgument(
+                "max_depth_time_delta_sec", default_value="0.20"
+            ),
             DeclareLaunchArgument("depth_candidate_frames", default_value="3"),
             DeclareLaunchArgument(
                 "run_inference_when_unsubscribed", default_value="false"
@@ -120,6 +123,10 @@ def generate_launch_description():
                         ),
                         "confidence_threshold": ParameterValue(
                             LaunchConfiguration("confidence_threshold"),
+                            value_type=float,
+                        ),
+                        "max_depth_time_delta_sec": ParameterValue(
+                            LaunchConfiguration("max_depth_time_delta_sec"),
                             value_type=float,
                         ),
                         "depth_candidate_frames": ParameterValue(
