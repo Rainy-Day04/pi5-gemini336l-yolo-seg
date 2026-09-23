@@ -39,6 +39,7 @@ class WorkItem:
     color: Image
     depth: Image | None
     camera_info: CameraInfo | None
+    depth_fallbacks: tuple[Image, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,9 @@ class SegmentationNode(Node):
             "retina_masks": True,
             "classes": "",
             "max_depth_time_delta_sec": 0.20,
+            # Try adjacent synchronized depth frames when one frame contains a
+            # transient hole inside a detection mask.
+            "depth_candidate_frames": 3,
             "min_depth_m": 0.15,
             "max_depth_m": 8.0,
             "min_valid_depth_pixels": 20,
@@ -319,16 +323,25 @@ class SegmentationNode(Node):
                 self.get_logger().warning(f"Failed to publish JPEG preview: {exc}")
                 self._last_warning_time = now
 
-    def _nearest_depth(self, stamp_ns: int) -> Image | None:
+    def _nearest_depth_candidates(self, stamp_ns: int) -> tuple[Image, ...]:
         if not self._depth_frames:
-            return None
-        nearest = min(
+            return ()
+        max_delta_ns = int(
+            float(self.get_parameter("max_depth_time_delta_sec").value) * 1e9
+        )
+        limit = max(1, int(self.get_parameter("depth_candidate_frames").value))
+        ordered = sorted(
             self._depth_frames, key=lambda msg: abs(_stamp_ns(msg) - stamp_ns)
         )
-        max_delta = float(self.get_parameter("max_depth_time_delta_sec").value)
-        if abs(_stamp_ns(nearest) - stamp_ns) > int(max_delta * 1e9):
-            return None
-        return nearest
+        return tuple(
+            msg
+            for msg in ordered
+            if abs(_stamp_ns(msg) - stamp_ns) <= max_delta_ns
+        )[:limit]
+
+    def _nearest_depth(self, stamp_ns: int) -> Image | None:
+        candidates = self._nearest_depth_candidates(stamp_ns)
+        return candidates[0] if candidates else None
 
     def _query_pixel_3d(self, request, response):
         """Return XYZ for a displayed RGB pixel using aligned depth."""
@@ -436,10 +449,18 @@ class SegmentationNode(Node):
             stamp_ns = _stamp_ns(color)
             if stamp_ns == self._last_enqueued_stamp:
                 return
-            depth = self._nearest_depth(stamp_ns)
+            depth_candidates = self._nearest_depth_candidates(stamp_ns)
+            depth = depth_candidates[0] if depth_candidates else None
             self._last_enqueued_stamp = stamp_ns
         try:
-            self._work.put_nowait(WorkItem(color=color, depth=depth, camera_info=info))
+            self._work.put_nowait(
+                WorkItem(
+                    color=color,
+                    depth=depth,
+                    camera_info=info,
+                    depth_fallbacks=depth_candidates[1:],
+                )
+            )
         except queue.Full:
             # Replace a queued stale frame. The frame currently being inferred
             # is untouched, and camera callbacks remain wait-free apart from a
@@ -447,7 +468,12 @@ class SegmentationNode(Node):
             try:
                 self._work.get_nowait()
                 self._work.put_nowait(
-                    WorkItem(color=color, depth=depth, camera_info=info)
+                    WorkItem(
+                        color=color,
+                        depth=depth,
+                        camera_info=info,
+                        depth_fallbacks=depth_candidates[1:],
+                    )
                 )
             except (queue.Empty, queue.Full):
                 pass
@@ -710,35 +736,46 @@ class SegmentationNode(Node):
         # Changing the 3D frame must not relabel the original RGB/overlay header.
         message.header = deepcopy(result.item.color.header)
         info = result.item.camera_info
-        depth_message = result.item.depth
-        depth_m: np.ndarray | None = None
+        depth_messages = (
+            (() if result.item.depth is None else (result.item.depth,))
+            + result.item.depth_fallbacks
+        )
+        depth_cache: dict[int, np.ndarray | None] = {}
         if info is not None:
             message.header.frame_id = info.header.frame_id
         depth_aligned = bool(self.get_parameter("depth_aligned_to_color").value)
-        if depth_message is not None and info is not None and not depth_aligned:
+        if depth_messages and info is not None and not depth_aligned:
             self._warn_throttled(
                 "Depth is not declared aligned to RGB; distance labels and 3D "
                 "positions are disabled. Enable Orbbec depth_registration and set "
                 "depth_aligned_to_color:=true."
             )
-        if depth_message is not None and info is not None and depth_aligned:
+        expected_shape = (
+            int(result.item.color.height),
+            int(result.item.color.width),
+        )
+
+        def decoded_depth(index: int, depth_message: Image) -> np.ndarray | None:
+            """Decode adjacent frames lazily; normal frames still decode only one."""
+            if index in depth_cache:
+                return depth_cache[index]
             try:
                 raw_depth = self._bridge.imgmsg_to_cv2(
                     depth_message, desired_encoding="passthrough"
                 )
                 depth_m = depth_to_meters(raw_depth, depth_message.encoding)
-                expected_shape = (
-                    int(result.item.color.height),
-                    int(result.item.color.width),
-                )
                 if depth_m.shape != expected_shape:
                     self._warn_throttled(
                         "Aligned depth size does not match RGB; 3D positions are invalid. "
-                        "Start the camera with depth_registration:=true and align_target_stream:=COLOR."
+                        "Start the camera with depth_registration:=true and "
+                        "align_target_stream:=COLOR."
                     )
                     depth_m = None
             except (ValueError, TypeError) as exc:
                 self._warn_throttled(f"Cannot use depth frame: {exc}")
+                depth_m = None
+            depth_cache[index] = depth_m
+            return depth_m
 
         for detection in result.detections:
             obj = Object3D()
@@ -746,20 +783,25 @@ class SegmentationNode(Node):
             obj.class_id = detection.class_id
             obj.class_name = detection.class_name
             obj.confidence = detection.confidence
-            if depth_m is not None and info is not None:
-                projection = project_mask_roi(
-                    detection.mask,
-                    depth_m,
-                    detection.box,
-                    float(info.k[0]),
-                    float(info.k[4]),
-                    float(info.k[2]),
-                    float(info.k[5]),
-                    float(self.get_parameter("min_depth_m").value),
-                    float(self.get_parameter("max_depth_m").value),
-                    int(self.get_parameter("min_valid_depth_pixels").value),
-                )
-                if projection is not None:
+            if depth_messages and info is not None and depth_aligned:
+                for depth_index, depth_message in enumerate(depth_messages):
+                    depth_m = decoded_depth(depth_index, depth_message)
+                    if depth_m is None:
+                        continue
+                    projection = project_mask_roi(
+                        detection.mask,
+                        depth_m,
+                        detection.box,
+                        float(info.k[0]),
+                        float(info.k[4]),
+                        float(info.k[2]),
+                        float(info.k[5]),
+                        float(self.get_parameter("min_depth_m").value),
+                        float(self.get_parameter("max_depth_m").value),
+                        int(self.get_parameter("min_valid_depth_pixels").value),
+                    )
+                    if projection is None:
+                        continue
                     obj.position_valid = True
                     obj.position.x = projection.x
                     obj.position.y = projection.y
@@ -768,6 +810,7 @@ class SegmentationNode(Node):
                     obj.pixel_u = projection.u
                     obj.pixel_v = projection.v
                     obj.valid_depth_pixels = projection.valid_pixels
+                    break
             message.objects.append(obj)
         self._transform_objects_to_navigation_frame(message)
         return message

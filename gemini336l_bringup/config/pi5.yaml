@@ -35,6 +35,8 @@ gemini336l_yolo_seg:
 
     # RGB/depth are matched by timestamp; inference never blocks camera callbacks.
     max_depth_time_delta_sec: 0.20
+    # Suppress one-frame XYZ dropouts caused by transient aligned-depth holes.
+    depth_candidate_frames: 3
     min_depth_m: 0.15
     max_depth_m: 8.0
     min_valid_depth_pixels: 20
