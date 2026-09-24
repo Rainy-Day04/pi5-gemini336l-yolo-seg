@@ -50,6 +50,27 @@ class PixelPicker(Node):
         self.frozen_header = None
         self.pending = None
         self.window = "Pixel XYZ: click=query, SPACE=live, Q=quit"
+        self.waiting_image = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(
+            self.waiting_image,
+            "Waiting for compressed overlay...",
+            (55, 225),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 220, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            self.waiting_image,
+            self.image_topic,
+            (35, 265),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (190, 190, 190),
+            1,
+            cv2.LINE_AA,
+        )
         self.client = self.create_client(QueryPixel3D, self.service_name)
         message_type = CompressedImage if self.compressed else Image
         self.create_subscription(
@@ -63,6 +84,10 @@ class PixelPicker(Node):
         )
         cv2.namedWindow(self.window, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window, self._mouse)
+        # Pump HighGUI once immediately.  Without an image, returning before
+        # waitKey leaves Qt/Wayland windows invisible or unresponsive.
+        cv2.imshow(self.window, self.waiting_image)
+        cv2.waitKey(1)
         self.create_timer(1.0 / 30.0, self._display)
         self.get_logger().info(
             f"Click {self.image_topic}; querying {self.service_name} with "
@@ -180,7 +205,7 @@ class PixelPicker(Node):
             )
             image = None if source is None else source.copy()
         if image is None:
-            return
+            image = self.waiting_image
         cv2.imshow(self.window, image)
         key = cv2.waitKey(1) & 0xFF
         if key == ord(" "):

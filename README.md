@@ -196,6 +196,13 @@ colcon build --symlink-install \
 source ~/pixel_view_ws/install/setup.bash
 ```
 
+Ubuntu Wayland 桌面下启动点选器时建议使用 XWayland 后端，避免 Qt `QSocketNotifier` 导致窗口不显示或无法点击：
+
+```bash
+export QT_QPA_PLATFORM=xcb
+ros2 run gemini336l_yolo_seg pixel_picker
+```
+
 鼠标左键点击任意像素后，窗口冻结点击的那一帧并显示查询结果；按空格恢复实时画面，按 `Q` 或 `Esc` 退出。默认用点击点附近 `5x5` 像素的有效深度中值，但 XYZ 仍沿点击像素对应的相机射线计算。结果优先转换到 `base_link`；窗口和终端都会显示实际 `frame_id`。
 
 没有图形界面时，也可以直接查询最新 RGB 帧的像素 `(320, 240)`：
